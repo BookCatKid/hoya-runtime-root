@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark, high-contrast: read from across a room on the 1920x1080 panel. -->
+    <style name="Runner" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#FF0F172A</item>
+        <item name="android:colorBackground">#FF0F172A</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+</resources>

@@ -1,0 +1,16 @@
+# Build artifacts
+app/build/
+app/hoya-runner.apk
+app/assets/ghostpw
+exploit/build/
+*.apk
+*.idsig
+
+# Runtime / logs
+*.log
+ktrace.txt
+rootout
+rootcmd
+
+# OS
+.DS_Store

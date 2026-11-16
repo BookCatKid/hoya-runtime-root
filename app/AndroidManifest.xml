@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.ghostlock.runner"
+    android:versionCode="1"
+    android:versionName="0.1">
+
+    <!--
+      minSdk/targetSdk 28 on purpose:
+        * the target device is API 28 (Fire OS 7);
+        * Android 10+ blocks exec() of files in the app data dir for apps targeting
+          API 29 or newer. At targetSdk 28 ghostpw can be exec'd straight from files/.
+      No permissions: the payload escalates itself, and the mailbox lives in app data.
+    -->
+    <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="28" />
+
+    <!-- Network shell listener (only runs when the user enables it). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required for the foreground service that hosts the exploit run. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:label="@string/app_name"
+        android:allowBackup="false"
+        android:debuggable="true"
+        android:theme="@style/Runner">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Runs the exploit at service oom_score_adj (~200), which the
+             spray counts are tuned for. Foreground notification keeps it alive. -->
+        <service
+            android:name=".ExploitService"
+            android:exported="false" />
+
+        <!-- Headless trigger: adb shell am broadcast -a dev.ghostlock.runner.RUN -->
+        <receiver
+            android:name=".RunReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.ghostlock.runner.RUN" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Auto-root after every boot/panic until the daemon answers. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

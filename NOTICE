@@ -1,0 +1,15 @@
+# NOTICE — authorized use only
+
+This repository contains a working kernel exploit for the Amazon Echo
+Show 15 (`hoya`, Fire OS 7). It grants full kernel-level code execution on
+the target device.
+
+**Use it only on hardware you own or are explicitly authorized to test.**
+Running it on devices you do not own is illegal in most jurisdictions.
+
+- The exploit is probabilistic and can panic or corrupt the kernel.
+- Root is per-boot; nothing here survives a reboot.
+- Do not redistribute this repository publicly.
+
+Derived in part from NebuSec/CyberMeowfia `IonStack` (Apache-2.0,
+CVE-2026-43499). Respect upstream terms.
