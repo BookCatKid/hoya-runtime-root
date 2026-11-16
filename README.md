@@ -27,8 +27,8 @@ GhostLock kernel exploit (CVE-2026-43499) for the **Amazon Echo Show 15
 - streams nothing during the run (timing-sensitive), polls the log tail;
 - on success, `ghost_rootd` answers the `rootcmd`/`rootout` mailbox and the
   app offers an on-device root shell plus a **LAN shell** (`nc <ip> 4444`);
-- `BootReceiver` auto-reruns the exploit after every boot/panic (capped at
-  5 auto-starts) — root is per-boot, so the app roots itself eventually.
+- rooting is manual-only — no boot receiver, so a panicky run can't
+  boot-loop the device.
 
 ```sh
 app/build.sh

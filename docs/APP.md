@@ -17,9 +17,9 @@ targetSdk 29+).
 5. "Network shell" starts a TCP server (port 4444) that proxies each line to
    the root mailbox — `nc <device-ip> 4444` from any machine on the LAN.
    Unauthenticated; enable deliberately.
-6. `BootReceiver` re-runs the exploit automatically after every boot/panic,
-   capped at 5 auto-starts (counter persists across reboots, resets on
-   success) so a panic-loop can't brick the device.
+6. No boot receiver: auto-running a panicky exploit on every boot could
+   boot-loop the device, so rooting is always manual (Get root button or
+   `am broadcast -a dev.ghostlock.runner.RUN`).
 
 ## Build (no Gradle)
 
@@ -39,9 +39,9 @@ script falls back to a stock `r8.jar` if the bundled d8 crashes.
   notification, net-shell toggle.
 - `RootServer.java` — TCP -> rootcmd/rootout proxy.
 - `MainActivity.java` — status view, log console, shell dialogs.
-- `BootReceiver.java` / `RunReceiver.java` — auto-root on boot, adb trigger.
+- `RunReceiver.java` — adb/headless trigger (`am broadcast ... RUN`).
 
 ## Files the app owns (all under its private files dir)
 
 `ghostpw`, `ghost_run.log`, `rootcmd`, `rootout`, `rootd.pid`, `ROOTED`,
-`exploit_status.txt`, `auto_runs.txt`, `net_wanted.txt`, `runner_ui.log`.
+`exploit_status.txt`, `net_wanted.txt`, `runner_ui.log`.
