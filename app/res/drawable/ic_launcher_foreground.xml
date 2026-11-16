@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- scaled to stay inside the adaptive-icon safe zone -->
+    <group
+        android:scaleX="0.78"
+        android:scaleY="0.78"
+        android:pivotX="54"
+        android:pivotY="54">
+
+        <!-- ghost body: rounded dome, wavy tail -->
+        <path
+            android:fillColor="#4ADE80"
+            android:pathData="M54,18 C38,18 29,29 29,44 L29,82 L37.5,73.5 L46,82 L54,73.5 L62,82 L70.5,73.5 L79,82 L79,44 C79,29 70,18 54,18 Z" />
+
+        <!-- eyes (cut out in background color) -->
+        <path
+            android:fillColor="#0F172A"
+            android:pathData="M42.5,46 a5.5,6.5 0 1,0 0.1,0 Z" />
+        <path
+            android:fillColor="#0F172A"
+            android:pathData="M58.5,46 a5.5,6.5 0 1,0 0.1,0 Z" />
+
+        <!-- little mouth -->
+        <path
+            android:fillColor="#0F172A"
+            android:pathData="M50,57 q2,3 4,0 q2,3 4,0" />
+    </group>
+</vector>
