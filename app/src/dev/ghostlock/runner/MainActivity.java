@@ -326,8 +326,10 @@ public final class MainActivity extends Activity implements Runner.Log {
         } else {
             startService(i);
         }
-        // Move to background so AMS drops us to the service adj class.
-        moveTaskToBack(true);
+        // Destroy the window right away: a stopped-but-alive activity can still
+        // draw a frame as the display dozes, and RenderThread aborts with
+        // EGL_BAD_ALLOC on this device, killing the process mid-exploit.
+        finish();
     }
 
     // ----------------------------------------------------------- shells
