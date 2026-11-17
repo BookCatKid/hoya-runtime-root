@@ -11,8 +11,8 @@ GhostLock kernel exploit (CVE-2026-43499) for the **Amazon Echo Show 15
 | Path | What |
 |---|---|
 | `exploit/src/` | Exploit source (13 files, self-contained; targets `hoya-PS75741.7082N`) |
-| `exploit/bin/ghostpw` | Prebuilt static aarch64 payload |
-| `exploit/build.sh` | Rebuild `ghostpw` with `zig cc` |
+| `exploit/bin/ghostpw` | **Proven** prebuilt static aarch64 payload (use this one) |
+| `exploit/build.sh` | Rebuild `ghostpw` with `zig cc` (older source rev — weaker spray) |
 | `app/` | "GhostLock Runner" APK — plain Java, no Gradle |
 | `docs/` | Device notes, exploit recipe, app architecture |
 | `CREDITS.md` | Upstream provenance (NebuSec/CyberMeowfia IonStack, Apache-2.0) |

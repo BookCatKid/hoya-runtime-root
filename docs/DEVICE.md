@@ -23,7 +23,12 @@
 ## Exploit summary
 
 `ghostpw` is a static aarch64 binary implementing a kernel LPE derived from
-CVE-2026-43499 (futex PI-requeue UAF). The working recipe:
+CVE-2026-43499 (futex PI-requeue UAF). **`exploit/bin/ghostpw` is the
+proven payload** — do not substitute a fresh `build.sh` rebuild for runs:
+the shipped binary was built from a newer source rev than `exploit/src/`
+(`MM_PARTIALS=13` → `spray=504`; the older source gives `spray=216`, which
+never lands the deposit — verified 24/24 misses). `src/common.h` has been
+updated to match, but the prebuilt remains authoritative. The working recipe:
 
 ```
 GHOST_STAGE=slide_dep GHOST_WAITER_CORE=2 GHOST_PARK=1 GHOST_FOPS_TRUE=1 ./ghostpw
