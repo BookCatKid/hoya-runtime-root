@@ -43,6 +43,7 @@ public final class MainActivity extends Activity implements Runner.Log {
     private ScrollView scroller;
     private Button netButton;
     private volatile boolean poller;
+    private String lastTail = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -270,6 +271,8 @@ public final class MainActivity extends Activity implements Runner.Log {
             lines.clear();
             console.setText("");
         }
+        // Don't let the 3s poller immediately re-add the current tail line.
+        lastTail = Runner.lastLogLine(this);
     }
 
     private void writeLogFile(String s) {
@@ -313,9 +316,12 @@ public final class MainActivity extends Activity implements Runner.Log {
             }
         }
         updateNetButton();
-        // Tail of the payload log so the screen isn't empty.
+        // Tail of the payload log so the screen isn't empty. Only when it
+        // actually changed — the poller runs every 3s and used to append the
+        // same line over and over, flooding the console.
         String tail = Runner.lastLogLine(this);
-        if (tail.length() > 0) {
+        if (tail.length() > 0 && !tail.equals(lastTail)) {
+            lastTail = tail;
             append("  … " + tail);
         }
     }
