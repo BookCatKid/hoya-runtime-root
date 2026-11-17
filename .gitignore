@@ -3,6 +3,7 @@ app/build/
 app/hoya-runner.apk
 app/assets/ghostpw
 exploit/build/
+exploit/bin/ghostpw
 *.apk
 *.idsig
 

@@ -10,12 +10,18 @@ GhostLock kernel exploit (CVE-2026-43499) for the **Amazon Echo Show 15
 
 | Path | What |
 |---|---|
-| `exploit/src/` | Exploit source (13 files, self-contained; targets `hoya-PS75741.7082N`) |
-| `exploit/bin/ghostpw` | **Proven** prebuilt static aarch64 payload (use this one) |
-| `exploit/build.sh` | Rebuild `ghostpw` with `zig cc` (older source rev — weaker spray) |
+| `exploit/src/` | Exploit source for `hoya-PS75741.7082N` (older upstream rev — see note) |
+| `exploit/build.sh` | Rebuild `ghostpw` with `zig cc` → `exploit/build/ghostpw` (weaker spray) |
+| payload (not in git) | **Proven** `ghostpw` at `~/ghostlock-echo-show-15/bin/ghostpw`; set `GHOSTPW=` to override |
 | `app/` | "GhostLock Runner" APK — plain Java, no Gradle |
 | `docs/` | Device notes, exploit recipe, app architecture |
 | `CREDITS.md` | Upstream provenance (NebuSec/CyberMeowfia IonStack, Apache-2.0) |
+
+> **No binaries are committed.** The proven payload is the upstream build
+> kept at `~/ghostlock-echo-show-15/bin/ghostpw` (191880 bytes, sha256
+> prefix `bf0d17b9…`). `app/build.sh` copies it into the APK assets;
+> rebuilds from `exploit/src/` are for source archaeology only — they
+> produce `spray=216` and never land on hoya.
 
 ## The app
 

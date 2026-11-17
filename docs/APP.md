@@ -7,10 +7,13 @@ targetSdk 29+).
 ## What it does
 
 1. Ships `ghostpw` as an APK asset; extracts it to `files/` on first run.
-   The shipped binary is the upstream payload with three hardcoded
-   `/data/user/0/com.device.diag/files` strings relativized to cwd-relative
-   paths (`.`, `child.log`, `ROOTED`) so the root mailbox lands in the
-   app's own files dir. Binary-only patch; exploit code untouched.
+   `app/build.sh` takes the payload from `GHOSTPW=` or
+   `~/ghostlock-echo-show-15/bin/ghostpw` (the proven upstream build —
+   binaries are not committed). The shipped binary is the upstream payload
+   with three hardcoded `/data/user/0/com.device.diag/files` strings
+   relativized to cwd-relative paths (`.`, `child.log`, `ROOTED`) so the
+   root mailbox lands in the app's own files dir. Binary-only patch;
+   exploit code untouched.
 2. "Get root" starts `ExploitService` (foreground service) and the activity
    steps aside — a visible activity pins `oom_score_adj=0`, which breaks the
    exploit's tuned spray. The service waits for AMS to assign the service
