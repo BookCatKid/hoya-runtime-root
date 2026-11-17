@@ -3,6 +3,7 @@ package dev.ghostlock.runner;
 import android.content.Context;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -14,8 +15,17 @@ import java.nio.charset.Charset;
 import java.util.Enumeration;
 
 /**
- * TCP -> root mailbox proxy. One client at a time; each line the client sends is
- * dropped into files/rootcmd and the matching rootout block is returned.
+ * TCP shell for debugging. It is NOT a root-only channel:
+ *
+ *  - when ghost_rootd is alive, every line goes through the root mailbox
+ *    (files/rootcmd -> files/rootout) and runs as uid 0;
+ *  - otherwise every line is executed by /system/bin/sh in this app's own
+ *    UID — the same app context the payload itself runs in — so the exploit
+ *    can be driven (and debugged) before anything is rooted, like the diag
+ *    c2 agent.
+ *
+ * It also picks up root mid-session: if the daemon starts answering while a
+ * client is connected, the next command goes through the mailbox.
  * Unauthenticated: only start it when the user asks for it.
  */
 final class RootServer {
@@ -85,13 +95,19 @@ final class RootServer {
     private static void handle(Context ctx, Socket s, Runner.Log log) {
         String peer = s.getInetAddress().getHostAddress();
         log.line("client connected: " + peer);
+        boolean root = Runner.channelAnswersAsRoot(ctx, null, 3_000);
         try {
             s.setSoTimeout(0);
             BufferedReader in = new BufferedReader(new InputStreamReader(
                     s.getInputStream(), Charset.forName("UTF-8")));
             OutputStreamWriter out = new OutputStreamWriter(s.getOutputStream(),
                     Charset.forName("UTF-8"));
-            out.write("ghost root shell — one command per line, 'exit' to quit\n");
+            out.write("ghost shell — " + (root
+                    ? "ROOT (via ghost_rootd, uid 0)"
+                    : "app context (no root yet, runs as this app's uid)")
+                    + "\none command per line, 'exit' to quit\n"
+                    + "cwd: " + Payload.dir(ctx).getAbsolutePath() + "\n"
+                    + "WARNING: unauthenticated — anyone on the LAN can use this\n");
             out.flush();
             String line;
             while ((line = in.readLine()) != null) {
@@ -102,14 +118,28 @@ final class RootServer {
                 if (line.length() == 0) {
                     continue;
                 }
-                String result;
-                try {
-                    result = Runner.rootCmd(ctx, line, 30_000, null);
-                } catch (Exception e) {
-                    result = "error: " + e + "\n";
+                if (!root) {
+                    // Cheap re-check: the user may have just rooted from here.
+                    root = Runner.channelAnswersAsRoot(ctx, null, 2_000);
+                    if (root) {
+                        out.write("[ghost_rootd appeared — switching to uid 0]\n");
+                        out.flush();
+                    }
                 }
-                if (result.trim().length() == 0) {
-                    result = "(no response — root daemon not answering)\n";
+                String result;
+                if (root) {
+                    try {
+                        result = Runner.rootCmd(ctx, line, 60_000, null);
+                    } catch (Exception e) {
+                        result = "error: " + e + "\n";
+                    }
+                    if (result.trim().length() == 0) {
+                        root = false;
+                        result = "(no response — root daemon stopped answering; "
+                                + "falling back to app context)\n" + execLocal(ctx, line);
+                    }
+                } else {
+                    result = execLocal(ctx, line);
                 }
                 out.write(result);
                 out.write("---\n");
@@ -122,6 +152,47 @@ final class RootServer {
             } catch (IOException ignored) {
             }
             log.line("client disconnected: " + peer);
+        }
+    }
+
+    /**
+     * Runs one command as this app's own UID via /system/bin/sh. This is the
+     * context the payload runs in, so it can drive ghostpw before root exists.
+     */
+    private static String execLocal(Context ctx, String cmd) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("/system/bin/sh", "-c", cmd);
+            pb.directory(Payload.dir(ctx));
+            pb.redirectErrorStream(true);
+            final Process p = pb.start();
+            final java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            Thread reader = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        java.io.InputStream is = p.getInputStream();
+                        byte[] b = new byte[4096];
+                        int n;
+                        while ((n = is.read(b)) > 0) {
+                            buf.write(b, 0, n);
+                        }
+                    } catch (IOException ignored) {
+                    }
+                }
+            }, "shell-read");
+            reader.setDaemon(true);
+            reader.start();
+            boolean finished = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroy();
+                reader.join(1000);
+                return new String(buf.toByteArray(), "UTF-8") + "\n(timed out after 30s)\n";
+            }
+            reader.join(2000);
+            return new String(buf.toByteArray(), "UTF-8")
+                    + "[rc=" + p.exitValue() + "]\n";
+        } catch (Throwable t) {
+            return "error: " + t + "\n";
         }
     }
 
