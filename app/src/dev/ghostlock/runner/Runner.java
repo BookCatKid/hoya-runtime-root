@@ -197,13 +197,25 @@ final class Runner {
         }
     }
 
+    /**
+     * Reads a whole file. Uses a stream, NOT RandomAccessFile: /proc files
+     * report length 0, so the length-based read returned "" for boot_id and
+     * silently disabled the stale-state wipe.
+     */
     private static String readFile(File f) {
         try {
-            java.io.RandomAccessFile r = new java.io.RandomAccessFile(f, "r");
-            byte[] b = new byte[(int) r.length()];
-            r.readFully(b);
-            r.close();
-            return new String(b, "UTF-8").trim();
+            java.io.FileInputStream in = new java.io.FileInputStream(f);
+            try {
+                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[512];
+                int n;
+                while ((n = in.read(chunk)) > 0) {
+                    buf.write(chunk, 0, n);
+                }
+                return new String(buf.toByteArray(), "UTF-8").trim();
+            } finally {
+                in.close();
+            }
         } catch (Exception e) {
             return "";
         }
