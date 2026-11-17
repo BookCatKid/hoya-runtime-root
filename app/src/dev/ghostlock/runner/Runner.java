@@ -163,6 +163,24 @@ final class Runner {
         }
     }
 
+    /** True when /proc/<pid>/comm is ghost_rootd — survives stale pid files. */
+    static boolean daemonAlive(int pid) {
+        if (pid <= 0) {
+            return false;
+        }
+        try {
+            byte[] b = new byte[32];
+            java.io.FileInputStream f = new java.io.FileInputStream(
+                    "/proc/" + pid + "/comm");
+            int n = f.read(b);
+            f.close();
+            return n > 0 && new String(b, 0, n, "UTF-8").trim()
+                    .equals("ghost_rootd");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /** True when the mailbox answers as uid 0. */
     static boolean channelAnswersAsRoot(Context ctx, Log log) {
         try {

@@ -251,25 +251,31 @@ public final class MainActivity extends Activity implements Runner.Log {
     // -------------------------------------------------------------- flow
 
     private void refreshStatus() {
+        // Verify before trusting: status/rootd files survive reboots, but the
+        // daemon does not. Cheap liveness check via /proc/<pid>/comm.
+        int pid = Runner.rootDaemonPid(this);
+        boolean daemonAlive = pid > 0 && Runner.daemonAlive(pid);
         String s = ExploitService.status(this);
-        if (s.startsWith("ROOTED")) {
+        if (s.startsWith("ROOTED") && !daemonAlive) {
+            // Stale state from a previous boot — rewrite so it stops lying.
+            ExploitService.setStatus(this, "not rooted — tap Get root");
+            s = "not rooted — tap Get root";
+        }
+        if (daemonAlive && Runner.channelAnswersAsRoot(this, null)) {
+            setStatus("ROOTED · ghost_rootd pid " + pid, OK);
+        } else if (s.startsWith("ROOTED")) {
             setStatus(s, OK);
         } else if (s.startsWith("failed") || s.startsWith("start failed")) {
             setStatus(s, BAD);
         } else if (s.startsWith("running")) {
             setStatus(s, WARN);
         } else {
-            int pid = Runner.rootDaemonPid(this);
-            if (pid > 0 && Runner.channelAnswersAsRoot(this, null)) {
-                setStatus("ROOTED · ghost_rootd pid " + pid, OK);
-            } else {
-                setStatus("not rooted — tap Get root", BAD);
-            }
+            setStatus("not rooted — tap Get root", BAD);
         }
         updateNetButton();
         // Tail of the payload log so the screen isn't empty.
         String tail = Runner.lastLogLine(this);
-        if (tail.length() > 0 && !s.startsWith("ROOTED")) {
+        if (tail.length() > 0 && !daemonAlive) {
             append("  … " + tail);
         }
     }
@@ -297,7 +303,8 @@ public final class MainActivity extends Activity implements Runner.Log {
     }
 
     private void confirmRun() {
-        if (Runner.rootDaemonPid(this) > 0) {
+        int pid = Runner.rootDaemonPid(this);
+        if (pid > 0 && Runner.daemonAlive(pid)) {
             new AlertDialog.Builder(this)
                     .setTitle("Re-run the exploit?")
                     .setMessage("A root daemon already exists. Each run leaves parked kernel "
