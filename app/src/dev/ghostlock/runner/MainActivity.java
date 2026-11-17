@@ -38,6 +38,7 @@ public final class MainActivity extends Activity implements Runner.Log {
 
     private final ArrayDeque<String> lines = new ArrayDeque<String>();
     private TextView status;
+    private TextView banner;
     private TextView console;
     private ScrollView scroller;
     private Button netButton;
@@ -94,6 +95,20 @@ public final class MainActivity extends Activity implements Runner.Log {
         status.setPadding(dp(16), dp(12), dp(16), dp(12));
         status.setBackground(box(PANEL, BORDER));
 
+        banner = new TextView(this);
+        banner.setTextSize(44);
+        banner.setTypeface(Typeface.DEFAULT_BOLD);
+        banner.setGravity(android.view.Gravity.CENTER);
+        banner.setPadding(0, dp(28), 0, dp(28));
+        banner.setVisibility(View.GONE);
+        try {
+            android.graphics.drawable.Drawable ghost =
+                    getResources().getDrawable(R.drawable.ic_launcher_foreground);
+            banner.setCompoundDrawablesWithIntrinsicBounds(null, ghost, null, null);
+            banner.setCompoundDrawablePadding(dp(10));
+        } catch (Throwable ignored) {
+        }
+
         console = new TextView(this);
         console.setTextColor(MUTED);
         console.setTextSize(12);
@@ -139,6 +154,7 @@ public final class MainActivity extends Activity implements Runner.Log {
 
         root.addView(title);
         root.addView(sub);
+        root.addView(banner);
         root.addView(status);
         root.addView(scroller, scrollerParams);
         root.addView(buttons);
@@ -183,6 +199,26 @@ public final class MainActivity extends Activity implements Runner.Log {
     }
 
     // ------------------------------------------------------------- status
+
+    private void showBanner(final String text, final int color) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                banner.setText(text);
+                banner.setTextColor(color);
+                banner.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void hideBanner() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                banner.setVisibility(View.GONE);
+            }
+        });
+    }
 
     private void setStatus(final String text, final int color) {
         runOnUiThread(new Runnable() {
@@ -255,6 +291,7 @@ public final class MainActivity extends Activity implements Runner.Log {
         String s = ExploitService.status(this);
         if (s.startsWith("running")) {
             setStatus(s, WARN);
+            hideBanner();
         } else {
             // The mailbox IS the liveness check: if ghost_rootd answers id
             // with uid=0 it's alive. /proc/<pid>/comm is NOT readable from
@@ -263,12 +300,14 @@ public final class MainActivity extends Activity implements Runner.Log {
             int pid = Runner.rootDaemonPid(this);
             if (Runner.channelAnswersAsRoot(this, null)) {
                 setStatus("ROOTED" + (pid > 0 ? " · ghost_rootd pid " + pid : ""), OK);
+                showBanner("👻 ROOTED!", OK);
             } else if (s.startsWith("ROOTED")) {
                 // File claims rooted but daemon doesn't answer — stale.
                 ExploitService.setStatus(this, "not rooted — tap Get root");
                 setStatus("not rooted — tap Get root", BAD);
             } else if (s.startsWith("failed") || s.startsWith("start failed")) {
                 setStatus(s, BAD);
+                showBanner("💀 exploit failed", WARN);
             } else {
                 setStatus("not rooted — tap Get root", BAD);
             }
