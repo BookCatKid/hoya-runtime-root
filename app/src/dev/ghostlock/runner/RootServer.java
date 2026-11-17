@@ -108,6 +108,9 @@ final class RootServer {
                 } catch (Exception e) {
                     result = "error: " + e + "\n";
                 }
+                if (result.trim().length() == 0) {
+                    result = "(no response — root daemon not answering)\n";
+                }
                 out.write(result);
                 out.write("---\n");
                 out.flush();

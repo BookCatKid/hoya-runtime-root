@@ -484,9 +484,19 @@ public final class MainActivity extends Activity implements Runner.Log {
             @Override
             public void run() {
                 append("$ " + script.replace("\n", "\n  "));
+                // Nothing answers the mailbox without a live daemon — say so
+                // instead of blocking 30s and printing nothing.
+                if (!Runner.channelAnswersAsRoot(MainActivity.this, null, 3_000)) {
+                    append("  not rooted — tap Get root first (no daemon to answer)");
+                    return;
+                }
                 try {
                     String out = Runner.rootCmd(MainActivity.this, script, 30_000,
                             MainActivity.this);
+                    if (out.trim().length() == 0) {
+                        append("  (no response — root daemon not answering)");
+                        return;
+                    }
                     for (String l : out.split("\n")) {
                         append("  " + l);
                     }
