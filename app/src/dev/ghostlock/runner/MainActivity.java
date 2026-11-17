@@ -43,7 +43,7 @@ public final class MainActivity extends Activity implements Runner.Log {
     private ScrollView scroller;
     private Button netButton;
     private volatile boolean poller;
-    private String lastTail = "";
+    private volatile long shownLogLen = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -271,8 +271,8 @@ public final class MainActivity extends Activity implements Runner.Log {
             lines.clear();
             console.setText("");
         }
-        // Don't let the 3s poller immediately re-add the current tail line.
-        lastTail = Runner.lastLogLine(this);
+        // Don't let the 3s poller immediately refill what was just cleared.
+        shownLogLen = Runner.runLogLength(this);
     }
 
     private void writeLogFile(String s) {
@@ -316,14 +316,46 @@ public final class MainActivity extends Activity implements Runner.Log {
             }
         }
         updateNetButton();
-        // Tail of the payload log so the screen isn't empty. Only when it
-        // actually changed — the poller runs every 3s and used to append the
-        // same line over and over, flooding the console.
-        String tail = Runner.lastLogLine(this);
-        if (tail.length() > 0 && !tail.equals(lastTail)) {
-            lastTail = tail;
-            append("  … " + tail);
+        // Show the actual payload log (tail) — successes and failures alike —
+        // instead of just the newest line.
+        long logLen = Runner.runLogLength(this);
+        if (logLen > 0 && logLen != shownLogLen) {
+            shownLogLen = logLen;
+            showPayloadLog(Runner.runLogTail(this, 300));
         }
+    }
+
+    /** Replace the console with the payload log tail. */
+    private void showPayloadLog(final String tail) {
+        if (tail.length() == 0) {
+            return;
+        }
+        final String[] body = tail.split("\n");
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (lines) {
+                    lines.clear();
+                    lines.add("GhostLock Runner · Echo Show 15 (hoya)");
+                    lines.add("payload: " + Payload.dir(MainActivity.this) + "/"
+                            + Payload.NAME);
+                    for (String l : body) {
+                        if (l.length() > 0) {
+                            lines.add("  " + l);
+                        }
+                    }
+                    while (lines.size() > MAX_LINES) {
+                        lines.removeFirst();
+                    }
+                    StringBuilder sb = new StringBuilder();
+                    for (String l : lines) {
+                        sb.append(l).append('\n');
+                    }
+                    console.setText(sb);
+                }
+                scroller.fullScroll(View.FOCUS_DOWN);
+            }
+        });
     }
 
     private void startPoller() {

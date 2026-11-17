@@ -108,6 +108,44 @@ final class Runner {
         return "";
     }
 
+    /** Size of ghost_run.log, or -1 when absent — lets the UI spot new output. */
+    static long runLogLength(Context ctx) {
+        File log = runLog(ctx);
+        return log.exists() ? log.length() : -1L;
+    }
+
+    /**
+     * Last maxLines lines of the run log, ANSI stripped, oldest first. Reads
+     * only the final 256 KB so an 800 KB log doesn't stall the UI thread.
+     */
+    static String runLogTail(Context ctx, int maxLines) {
+        File log = runLog(ctx);
+        if (!log.exists()) {
+            return "";
+        }
+        try {
+            RandomAccessFile f = new RandomAccessFile(log, "r");
+            try {
+                long len = f.length();
+                long start = Math.max(0, len - 262144);
+                f.seek(start);
+                byte[] raw = new byte[(int) (len - start)];
+                f.readFully(raw);
+                String[] all = new String(raw, Charset.forName("UTF-8")).split("\n");
+                int from = Math.max(0, all.length - maxLines);
+                StringBuilder sb = new StringBuilder();
+                for (int i = from; i < all.length; i++) {
+                    sb.append(stripAnsi(all[i])).append('\n');
+                }
+                return sb.toString();
+            } finally {
+                f.close();
+            }
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     /** Whole run log as plain text lines (ANSI stripped). */
     static String runLogText(Context ctx) {
         File log = runLog(ctx);
