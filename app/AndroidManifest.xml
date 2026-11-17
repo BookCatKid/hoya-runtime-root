@@ -9,7 +9,9 @@
         * the target device is API 28 (Fire OS 7);
         * Android 10+ blocks exec() of files in the app data dir for apps targeting
           API 29 or newer. At targetSdk 28 ghostpw can be exec'd straight from files/.
-      No permissions: the payload escalates itself, and the mailbox lives in app data.
+      The exploit itself needs no permissions: the payload escalates itself and the
+      root mailbox lives in app data. INTERNET/FOREGROUND_SERVICE below are only for
+      the optional LAN shell and the service that hosts a run.
     -->
     <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="28" />
 

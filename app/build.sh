@@ -29,6 +29,7 @@ if [ ! -e "$payload_src" ]; then
   echo "no payload at $payload_src — run exploit/build.sh first or set GHOSTPW=" >&2
   exit 1
 fi
+mkdir -p "$here/assets"
 cp "$payload_src" "$here/assets/ghostpw"
 chmod 644 "$here/assets/ghostpw"
 echo "    using $payload_src ($(shasum -a 256 "$payload_src" | cut -c1-16)…)"
@@ -75,8 +76,11 @@ if [ "$d8_ok" = 1 ]; then
   d8 --release --min-api 28 --lib "$JAR" --output "$out/dex" @"$out/classes.txt"
 else
   echo "    bundled d8 is broken here, using r8 ${R8_VERSION} from \$HOME/.hoya-runner"
-  [ -e "$r8" ] || mkdir -p "$(dirname "$r8")" && curl -fsSL -o "$r8" \
-    "https://dl.google.com/dl/android/maven2/com/android/tools/r8/${R8_VERSION}/r8-${R8_VERSION}.jar"
+  if [ ! -e "$r8" ]; then
+    mkdir -p "$(dirname "$r8")"
+    curl -fsSL -o "$r8" \
+      "https://dl.google.com/dl/android/maven2/com/android/tools/r8/${R8_VERSION}/r8-${R8_VERSION}.jar"
+  fi
   java -cp "$r8" com.android.tools.r8.D8 --release --min-api 28 --lib "$JAR" \
     --output "$out/dex" @"$out/classes.txt"
 fi
