@@ -51,8 +51,9 @@ public final class MainActivity extends Activity implements Runner.Log {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         Runner.wipeStaleStateIfNewBoot(this);
         setContentView(buildUi());
-        append("GhostLock Runner · Echo Show 15 (hoya)");
         append("payload: " + Payload.dir(this) + "/" + Payload.NAME);
+        // The poller refills the console from ghost_run.log on first refresh;
+        // without this the header line would be overwritten instantly.
         refreshStatus();
         if (getIntent() != null && getIntent().getBooleanExtra("run", false)) {
             startRunAndLeave();
@@ -79,25 +80,19 @@ public final class MainActivity extends Activity implements Runner.Log {
 
         TextView title = new TextView(this);
         title.setText("GhostLock Runner");
-        title.setTextSize(26);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextSize(22);
         title.setTextColor(TEXT);
-
-        TextView sub = new TextView(this);
-        sub.setText("hoya · API " + android.os.Build.VERSION.SDK_INT + " · " + android.os.Build.ID);
-        sub.setTextColor(DIM);
-        sub.setTextSize(13);
-        sub.setPadding(0, 0, 0, dp(12));
+        title.setPadding(0, 0, 0, dp(8));
 
         status = new TextView(this);
-        status.setTextSize(18);
+        status.setTextSize(16);
         status.setTypeface(Typeface.DEFAULT_BOLD);
         status.setTextColor(WARN);
         status.setPadding(dp(16), dp(12), dp(16), dp(12));
         status.setBackground(box(PANEL, BORDER));
 
         banner = new TextView(this);
-        banner.setTextSize(44);
+        banner.setTextSize(32);
         banner.setTypeface(Typeface.DEFAULT_BOLD);
         banner.setGravity(android.view.Gravity.CENTER);
         banner.setPadding(0, dp(28), 0, dp(28));
@@ -154,9 +149,8 @@ public final class MainActivity extends Activity implements Runner.Log {
         }), weight());
 
         root.addView(title);
-        root.addView(sub);
-        root.addView(banner);
         root.addView(status);
+        root.addView(banner);
         root.addView(scroller, scrollerParams);
         root.addView(buttons);
         return root;
@@ -271,7 +265,6 @@ public final class MainActivity extends Activity implements Runner.Log {
             lines.clear();
             console.setText("");
         }
-        // Don't let the 3s poller immediately refill what was just cleared.
         shownLogLen = Runner.runLogLength(this);
     }
 
@@ -302,7 +295,7 @@ public final class MainActivity extends Activity implements Runner.Log {
             // may be missing even while the daemon lives — don't gate on it.
             int pid = Runner.rootDaemonPid(this);
             if (Runner.channelAnswersAsRoot(this, null)) {
-                setStatus("ROOTED" + (pid > 0 ? " · ghost_rootd pid " + pid : ""), OK);
+                setStatus("ROOTED" + (pid > 0 ? " · pid " + pid : ""), OK);
                 showBanner("👻 ROOTED!", OK);
             } else if (s.startsWith("ROOTED")) {
                 // File claims rooted but daemon doesn't answer — stale.
@@ -310,7 +303,7 @@ public final class MainActivity extends Activity implements Runner.Log {
                 setStatus("not rooted — tap Get root", BAD);
             } else if (s.startsWith("failed") || s.startsWith("start failed")) {
                 setStatus(s, BAD);
-                showBanner("💀 exploit failed", WARN);
+                showBanner("exploit failed", WARN);
             } else {
                 setStatus("not rooted — tap Get root", BAD);
             }
@@ -336,7 +329,6 @@ public final class MainActivity extends Activity implements Runner.Log {
             public void run() {
                 synchronized (lines) {
                     lines.clear();
-                    lines.add("GhostLock Runner · Echo Show 15 (hoya)");
                     lines.add("payload: " + Payload.dir(MainActivity.this) + "/"
                             + Payload.NAME);
                     for (String l : body) {
@@ -404,8 +396,6 @@ public final class MainActivity extends Activity implements Runner.Log {
      * activity pins the process at oom_score_adj=0 and the exploit misses.
      */
     private void startRunAndLeave() {
-        append("starting exploit service — leaving this screen on purpose");
-        append("(a visible app forces oom_score_adj=0; the exploit needs ~200)");
         Intent i = new Intent(this, ExploitService.class)
                 .setAction(ExploitService.ACTION_RUN);
         if (android.os.Build.VERSION.SDK_INT >= 26) {
@@ -471,8 +461,6 @@ public final class MainActivity extends Activity implements Runner.Log {
 
         new AlertDialog.Builder(this)
                 .setTitle("Run as root")
-                .setMessage("Script goes to files/rootcmd, output comes back from files/rootout. "
-                        + "For pm/dumpsys prefix with: runcon u:r:shell:s0")
                 .setView(input)
                 .setPositiveButton("Run", (d, w) -> shell(input.getText().toString()))
                 .setNegativeButton("Cancel", null)
@@ -487,14 +475,14 @@ public final class MainActivity extends Activity implements Runner.Log {
                 // Nothing answers the mailbox without a live daemon — say so
                 // instead of blocking 30s and printing nothing.
                 if (!Runner.channelAnswersAsRoot(MainActivity.this, null, 3_000)) {
-                    append("  not rooted — tap Get root first (no daemon to answer)");
+                    append("  not rooted — tap Get root first");
                     return;
                 }
                 try {
                     String out = Runner.rootCmd(MainActivity.this, script, 30_000,
                             MainActivity.this);
                     if (out.trim().length() == 0) {
-                        append("  (no response — root daemon not answering)");
+                        append("  (no response)");
                         return;
                     }
                     for (String l : out.split("\n")) {
