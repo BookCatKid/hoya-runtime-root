@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-/** Ships ghostpw inside the APK assets and places it in the app's private files dir. */
+/** Ships ghostpw as an APK asset into the app's files dir. */
 final class Payload {
 
     static final String NAME = "ghostpw";
@@ -28,7 +28,6 @@ final class Payload {
         if (fresh) {
             copy(ctx, NAME, out);
         }
-        // Exec from the app data dir only works with targetSdk <= 28, which this app uses.
         if (!out.setExecutable(true, true)) {
             throw new IOException("cannot chmod +x " + out);
         }

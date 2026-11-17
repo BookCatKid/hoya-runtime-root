@@ -17,11 +17,7 @@ import android.widget.TextView;
 
 import java.util.ArrayDeque;
 
-/**
- * UI for the GhostLock runner. The exploit itself runs in ExploitService so the
- * process sits at the foreground-service oom_score_adj the spray is tuned for —
- * a visible activity would force adj=0 and every attempt would miss.
- */
+/** UI for the GhostLock runner. The exploit runs in ExploitService (foreground-service oom_score_adj). */
 public final class MainActivity extends Activity implements Runner.Log {
 
     private static final int BG = 0xFF0F172A;
@@ -52,8 +48,6 @@ public final class MainActivity extends Activity implements Runner.Log {
         Runner.wipeStaleStateIfNewBoot(this);
         setContentView(buildUi());
         append("payload: " + Payload.dir(this) + "/" + Payload.NAME);
-        // The poller refills the console from ghost_run.log on first refresh;
-        // without this the header line would be overwritten instantly.
         refreshStatus();
         if (getIntent() != null && getIntent().getBooleanExtra("run", false)) {
             startRunAndLeave();
@@ -289,28 +283,21 @@ public final class MainActivity extends Activity implements Runner.Log {
             setStatus(s, WARN);
             hideBanner();
         } else {
-            // The mailbox IS the liveness check: if ghost_rootd answers id
-            // with uid=0 it's alive. /proc/<pid>/comm is NOT readable from
-            // app context (SELinux denies kernel-domain procs), and rootd.pid
-            // may be missing even while the daemon lives — don't gate on it.
             int pid = Runner.rootDaemonPid(this);
             if (Runner.channelAnswersAsRoot(this, null)) {
                 setStatus("ROOTED" + (pid > 0 ? " · pid " + pid : ""), OK);
                 showBanner("👻 ROOTED!", OK);
             } else if (s.startsWith("ROOTED")) {
-                // File claims rooted but daemon doesn't answer — stale.
-                ExploitService.setStatus(this, "not rooted — tap Get root");
-                setStatus("not rooted — tap Get root", BAD);
+                ExploitService.setStatus(this, "not rooted. Tap Get root");
+                setStatus("not rooted. Tap Get root", BAD);
             } else if (s.startsWith("failed") || s.startsWith("start failed")) {
                 setStatus(s, BAD);
                 showBanner("exploit failed", WARN);
             } else {
-                setStatus("not rooted — tap Get root", BAD);
+                setStatus("not rooted. Tap Get root", BAD);
             }
         }
         updateNetButton();
-        // Show the actual payload log (tail) — successes and failures alike —
-        // instead of just the newest line.
         long logLen = Runner.runLogLength(this);
         if (logLen > 0 && logLen != shownLogLen) {
             shownLogLen = logLen;
@@ -374,8 +361,6 @@ public final class MainActivity extends Activity implements Runner.Log {
 
     private void confirmRun() {
         int pid = Runner.rootDaemonPid(this);
-        // channelAnswersAsRoot blocks up to its timeout — keep it short here
-        // so the dialog check doesn't freeze the UI.
         if (pid > 0 && Runner.channelAnswersAsRoot(this, null, 3_000)) {
             new AlertDialog.Builder(this)
                     .setTitle("Re-run the exploit?")
@@ -391,10 +376,7 @@ public final class MainActivity extends Activity implements Runner.Log {
         }
     }
 
-    /**
-     * Hand the run to the foreground service and get out of the way: a visible
-     * activity pins the process at oom_score_adj=0 and the exploit misses.
-     */
+    /** Hand the run to the foreground service and exit. */
     private void startRunAndLeave() {
         Intent i = new Intent(this, ExploitService.class)
                 .setAction(ExploitService.ACTION_RUN);
@@ -403,9 +385,8 @@ public final class MainActivity extends Activity implements Runner.Log {
         } else {
             startService(i);
         }
-        // Destroy the window right away: a stopped-but-alive activity can still
-        // draw a frame as the display dozes, and RenderThread aborts with
-        // EGL_BAD_ALLOC on this device, killing the process mid-exploit.
+        // A stopped-but-alive activity can still draw a frame as the display
+        // dozes; RenderThread aborts with EGL_BAD_ALLOC on this device.
         finish();
     }
 
@@ -472,10 +453,10 @@ public final class MainActivity extends Activity implements Runner.Log {
             @Override
             public void run() {
                 append("$ " + script.replace("\n", "\n  "));
-                // Nothing answers the mailbox without a live daemon — say so
+                // Nothing answers the mailbox without a live daemon. Say so
                 // instead of blocking 30s and printing nothing.
                 if (!Runner.channelAnswersAsRoot(MainActivity.this, null, 3_000)) {
-                    append("  not rooted — tap Get root first");
+                    append("  not rooted. Tap Get root first");
                     return;
                 }
                 try {

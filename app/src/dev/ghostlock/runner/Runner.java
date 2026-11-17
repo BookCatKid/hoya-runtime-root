@@ -18,7 +18,7 @@ final class Runner {
         void line(String s);
     }
 
-    /** Env for the verified slide_dep root path (see docs/EXPLOIT.md). */
+    /** Env for the slide_dep root path. */
     private static final String[][] EXPLOIT_ENV = {
             {"GHOST_STAGE", "slide_dep"},
             {"GHOST_WAITER_CORE", "2"},
@@ -36,13 +36,7 @@ final class Runner {
         return new File(Payload.dir(ctx), RUN_LOG);
     }
 
-    /**
-     * The exploit's child spray was tuned for oom_score_adj=200 (the diag
-     * app's value): LMK trims idle shaping children, shaping the slab
-     * population the deposit grooms. A foreground app defaults to 0, which
-     * keeps every child alive and breaks placement (observed: 12/12 cfi
-     * misses). Raising our own adj is unprivileged; forked children inherit.
-     */
+    /** Set oom_score_adj to the value the spray counts are calibrated for. */
     static void matchDiagOomAdj() {
         try {
             java.io.FileOutputStream f = new java.io.FileOutputStream(
@@ -78,7 +72,7 @@ final class Runner {
         return pb.start();
     }
 
-    /** Last non-empty line of the run log, ANSI escapes stripped. "" if none. */
+    /** Last non-empty line of the run log, ANSI escapes stripped. */
     static String lastLogLine(Context ctx) {
         File log = runLog(ctx);
         if (!log.exists()) {
@@ -108,7 +102,7 @@ final class Runner {
         return "";
     }
 
-    /** Size of ghost_run.log, or -1 when absent — lets the UI spot new output. */
+    /** Size of ghost_run.log, or -1 when absent. */
     static long runLogLength(Context ctx) {
         File log = runLog(ctx);
         return log.exists() ? log.length() : -1L;
@@ -201,12 +195,7 @@ final class Runner {
         }
     }
 
-    /**
-     * Root state is per-boot but our marker files are not. On first touch
-     * after a reboot, compare /proc/sys/kernel/random/boot_id with the
-     * stored one; if it changed, wipe rootcmd/rootout/rootd.pid/ROOTED/
-     * exploit_status so nothing stale can claim we're rooted.
-     */
+    /** Wipe root marker files when boot_id changes. */
     static void wipeStaleStateIfNewBoot(Context ctx) {
         try {
             File dir = Payload.dir(ctx);
@@ -217,14 +206,14 @@ final class Runner {
                 return;
             }
             if (prev.length() == 0) {
-                // First run ever — nothing to compare, just record.
+                // First run ever. Nothing to compare, just record.
                 writeFile(bootFile, cur);
                 return;
             }
             if (cur.equals(prev)) {
                 return;
             }
-            // Boot changed: everything root-related is genuinely stale —
+            // Boot changed: everything root-related is genuinely stale:
             // a daemon from the previous boot cannot survive a reboot.
             for (String n : new String[]{"rootcmd", "rootout", "rootd.pid",
                     "ROOTED", "exploit_status.txt"}) {
@@ -235,11 +224,7 @@ final class Runner {
         }
     }
 
-    /**
-     * Reads a whole file. Uses a stream, NOT RandomAccessFile: /proc files
-     * report length 0, so the length-based read returned "" for boot_id and
-     * silently disabled the stale-state wipe.
-     */
+    /** Read a file via stream; /proc entries report length 0. */
     private static String readFile(File f) {
         try {
             java.io.FileInputStream in = new java.io.FileInputStream(f);
@@ -268,7 +253,7 @@ final class Runner {
         }
     }
 
-    /** True when /proc/<pid>/comm is ghost_rootd — survives stale pid files. */
+    /** True when /proc/<pid>/comm is ghost_rootd. */
     static boolean daemonAlive(int pid) {
         if (pid <= 0) {
             return false;
@@ -300,14 +285,7 @@ final class Runner {
         }
     }
 
-    /**
-     * Writes a script to files/rootcmd and waits for ghost_rootd to append to
-     * files/rootout. Returns captured output including the [rc=N] marker.
-     *
-     * NOTE: rootout is created by the root daemon mode 0644 — the app can
-     * read but NOT truncate it. So instead of clearing it we snapshot the
-     * length first and only accept output appended after our command.
-     */
+    /** Writes a script to files/rootcmd and waits for ghost_rootd output. */
     static String rootCmd(Context ctx, String script, long timeoutMs, Log log)
             throws IOException, InterruptedException {
         File dir = Payload.dir(ctx);

@@ -2,11 +2,8 @@
 # Build hoya-runner.apk with the plain SDK tools: aapt2 + javac + d8 + apksigner.
 # No Gradle, no Android Studio project, no dependencies.
 #
-# Payload: binaries are NOT stored in git. The proven ghostpw payload lives
-# outside the repo at ~/ghostlock-echo-show-15/bin/ghostpw (original upstream
-# build, 191880 bytes, MM_PARTIALS=13/spray=504 — the exact rev that roots
-# this device). Set GHOSTPW=/path/to/ghostpw to override, or build one with
-# exploit/build.sh (zig; older source rev, weaker spray).
+# Payload: set GHOSTPW=/path/to/ghostpw to use a prebuilt binary, or let
+# exploit/build.sh produce one into exploit/build/ghostpw first.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -27,12 +24,9 @@ done
 export PATH="$BT:$PATH"
 
 echo "==> payload"
-payload_src=${GHOSTPW:-$HOME/ghostlock-echo-show-15/bin/ghostpw}
+payload_src=${GHOSTPW:-$root/exploit/build/ghostpw}
 if [ ! -e "$payload_src" ]; then
-  payload_src=$root/exploit/bin/ghostpw
-fi
-if [ ! -e "$payload_src" ]; then
-  echo "no payload found — set GHOSTPW= or build with exploit/build.sh" >&2
+  echo "no payload at $payload_src — run exploit/build.sh first or set GHOSTPW=" >&2
   exit 1
 fi
 cp "$payload_src" "$here/assets/ghostpw"

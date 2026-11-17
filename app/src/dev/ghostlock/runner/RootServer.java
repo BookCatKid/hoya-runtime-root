@@ -14,20 +14,7 @@ import java.net.Socket;
 import java.nio.charset.Charset;
 import java.util.Enumeration;
 
-/**
- * TCP shell for debugging. It is NOT a root-only channel:
- *
- *  - when ghost_rootd is alive, every line goes through the root mailbox
- *    (files/rootcmd -> files/rootout) and runs as uid 0;
- *  - otherwise every line is executed by /system/bin/sh in this app's own
- *    UID — the same app context the payload itself runs in — so the exploit
- *    can be driven (and debugged) before anything is rooted, like the diag
- *    c2 agent.
- *
- * It also picks up root mid-session: if the daemon starts answering while a
- * client is connected, the next command goes through the mailbox.
- * Unauthenticated: only start it when the user asks for it.
- */
+/** TCP shell: app-context commands until ghost_rootd answers, then uid 0. */
 final class RootServer {
 
     private static final int PORT = 4444;
@@ -102,12 +89,12 @@ final class RootServer {
                     s.getInputStream(), Charset.forName("UTF-8")));
             OutputStreamWriter out = new OutputStreamWriter(s.getOutputStream(),
                     Charset.forName("UTF-8"));
-            out.write("ghost shell — " + (root
+            out.write("ghost shell : " + (root
                     ? "ROOT (via ghost_rootd, uid 0)"
                     : "app context (no root yet, runs as this app's uid)")
                     + "\none command per line, 'exit' to quit\n"
                     + "cwd: " + Payload.dir(ctx).getAbsolutePath() + "\n"
-                    + "WARNING: unauthenticated — anyone on the LAN can use this\n");
+                    + "WARNING: unauthenticated. Anyone on the LAN can use this\n");
             out.flush();
             String line;
             while ((line = in.readLine()) != null) {
@@ -122,7 +109,7 @@ final class RootServer {
                     // Cheap re-check: the user may have just rooted from here.
                     root = Runner.channelAnswersAsRoot(ctx, null, 2_000);
                     if (root) {
-                        out.write("[ghost_rootd appeared — switching to uid 0]\n");
+                        out.write("[ghost_rootd appeared. Switching to uid 0]\n");
                         out.flush();
                     }
                 }
@@ -135,7 +122,7 @@ final class RootServer {
                     }
                     if (result.trim().length() == 0) {
                         root = false;
-                        result = "(no response — root daemon stopped answering; "
+                        result = "(no response. Root daemon stopped answering; "
                                 + "falling back to app context)\n" + execLocal(ctx, line);
                     }
                 } else {
@@ -155,10 +142,7 @@ final class RootServer {
         }
     }
 
-    /**
-     * Runs one command as this app's own UID via /system/bin/sh. This is the
-     * context the payload runs in, so it can drive ghostpw before root exists.
-     */
+    /** Runs one command as this app's UID via /system/bin/sh. */
     private static String execLocal(Context ctx, String cmd) {
         try {
             ProcessBuilder pb = new ProcessBuilder("/system/bin/sh", "-c", cmd);
