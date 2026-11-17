@@ -163,6 +163,61 @@ final class Runner {
         }
     }
 
+    /**
+     * Root state is per-boot but our marker files are not. On first touch
+     * after a reboot, compare /proc/sys/kernel/random/boot_id with the
+     * stored one; if it changed, wipe rootcmd/rootout/rootd.pid/ROOTED/
+     * exploit_status so nothing stale can claim we're rooted.
+     */
+    static void wipeStaleStateIfNewBoot(Context ctx) {
+        try {
+            File dir = Payload.dir(ctx);
+            File bootFile = new File(dir, "boot_id.txt");
+            String cur = readFile(new File("/proc/sys/kernel/random/boot_id"));
+            String prev = readFile(bootFile);
+            if (cur.length() == 0) {
+                return;
+            }
+            if (prev.length() == 0) {
+                // First run ever — nothing to compare, just record.
+                writeFile(bootFile, cur);
+                return;
+            }
+            if (cur.equals(prev)) {
+                return;
+            }
+            // Boot changed: everything root-related is genuinely stale —
+            // a daemon from the previous boot cannot survive a reboot.
+            for (String n : new String[]{"rootcmd", "rootout", "rootd.pid",
+                    "ROOTED", "exploit_status.txt"}) {
+                new File(dir, n).delete();
+            }
+            writeFile(bootFile, cur);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static String readFile(File f) {
+        try {
+            java.io.RandomAccessFile r = new java.io.RandomAccessFile(f, "r");
+            byte[] b = new byte[(int) r.length()];
+            r.readFully(b);
+            r.close();
+            return new String(b, "UTF-8").trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static void writeFile(File f, String s) {
+        try {
+            java.io.FileOutputStream o = new java.io.FileOutputStream(f, false);
+            o.write(s.getBytes("UTF-8"));
+            o.close();
+        } catch (Exception ignored) {
+        }
+    }
+
     /** True when /proc/<pid>/comm is ghost_rootd — survives stale pid files. */
     static boolean daemonAlive(int pid) {
         if (pid <= 0) {
@@ -183,8 +238,12 @@ final class Runner {
 
     /** True when the mailbox answers as uid 0. */
     static boolean channelAnswersAsRoot(Context ctx, Log log) {
+        return channelAnswersAsRoot(ctx, log, 8_000);
+    }
+
+    static boolean channelAnswersAsRoot(Context ctx, Log log, long timeoutMs) {
         try {
-            String out = rootCmd(ctx, "id", 8_000, null);
+            String out = rootCmd(ctx, "id", timeoutMs, null);
             return out.contains("uid=0");
         } catch (Exception e) {
             return false;
@@ -194,6 +253,10 @@ final class Runner {
     /**
      * Writes a script to files/rootcmd and waits for ghost_rootd to append to
      * files/rootout. Returns captured output including the [rc=N] marker.
+     *
+     * NOTE: rootout is created by the root daemon mode 0644 — the app can
+     * read but NOT truncate it. So instead of clearing it we snapshot the
+     * length first and only accept output appended after our command.
      */
     static String rootCmd(Context ctx, String script, long timeoutMs, Log log)
             throws IOException, InterruptedException {
@@ -201,8 +264,7 @@ final class Runner {
         File cmd = new File(dir, "rootcmd");
         File out = new File(dir, "rootout");
 
-        FileOutputStream trunc = new FileOutputStream(out, false);
-        trunc.close();
+        final long baseLen = out.exists() ? out.length() : 0L;
 
         FileOutputStream os = new FileOutputStream(cmd, false);
         try {
@@ -221,20 +283,35 @@ final class Runner {
         while (System.currentTimeMillis() < deadline) {
             Thread.sleep(300);
             sb.setLength(0);
-            if (out.exists()) {
-                byte[] raw = new byte[(int) out.length()];
-                RandomAccessFile f = new RandomAccessFile(out, "r");
-                try {
-                    f.readFully(raw);
-                } finally {
-                    f.close();
-                }
-                sb.append(new String(raw, Charset.forName("UTF-8")));
-            }
+            sb.append(readAppended(out, baseLen));
             if (sb.indexOf("[rc=") >= 0) {
                 return sb.toString();
             }
         }
         return sb.toString();
+    }
+
+    /** Contents of f appended after offset `from`, or "" if unreadable. */
+    private static String readAppended(File f, long from) {
+        try {
+            if (!f.exists()) {
+                return "";
+            }
+            RandomAccessFile r = new RandomAccessFile(f, "r");
+            try {
+                long len = r.length();
+                if (len <= from) {
+                    return "";
+                }
+                r.seek(from);
+                byte[] raw = new byte[(int) (len - from)];
+                r.readFully(raw);
+                return new String(raw, Charset.forName("UTF-8"));
+            } finally {
+                r.close();
+            }
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

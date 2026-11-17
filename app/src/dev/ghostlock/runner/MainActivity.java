@@ -47,6 +47,7 @@ public final class MainActivity extends Activity implements Runner.Log {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        Runner.wipeStaleStateIfNewBoot(this);
         setContentView(buildUi());
         append("GhostLock Runner · Echo Show 15 (hoya)");
         append("payload: " + Payload.dir(this) + "/" + Payload.NAME);
@@ -251,31 +252,31 @@ public final class MainActivity extends Activity implements Runner.Log {
     // -------------------------------------------------------------- flow
 
     private void refreshStatus() {
-        // Verify before trusting: status/rootd files survive reboots, but the
-        // daemon does not. Cheap liveness check via /proc/<pid>/comm.
-        int pid = Runner.rootDaemonPid(this);
-        boolean daemonAlive = pid > 0 && Runner.daemonAlive(pid);
         String s = ExploitService.status(this);
-        if (s.startsWith("ROOTED") && !daemonAlive) {
-            // Stale state from a previous boot — rewrite so it stops lying.
-            ExploitService.setStatus(this, "not rooted — tap Get root");
-            s = "not rooted — tap Get root";
-        }
-        if (daemonAlive && Runner.channelAnswersAsRoot(this, null)) {
-            setStatus("ROOTED · ghost_rootd pid " + pid, OK);
-        } else if (s.startsWith("ROOTED")) {
-            setStatus(s, OK);
-        } else if (s.startsWith("failed") || s.startsWith("start failed")) {
-            setStatus(s, BAD);
-        } else if (s.startsWith("running")) {
+        if (s.startsWith("running")) {
             setStatus(s, WARN);
         } else {
-            setStatus("not rooted — tap Get root", BAD);
+            // The mailbox IS the liveness check: if ghost_rootd answers id
+            // with uid=0 it's alive. /proc/<pid>/comm is NOT readable from
+            // app context (SELinux denies kernel-domain procs), and rootd.pid
+            // may be missing even while the daemon lives — don't gate on it.
+            int pid = Runner.rootDaemonPid(this);
+            if (Runner.channelAnswersAsRoot(this, null)) {
+                setStatus("ROOTED" + (pid > 0 ? " · ghost_rootd pid " + pid : ""), OK);
+            } else if (s.startsWith("ROOTED")) {
+                // File claims rooted but daemon doesn't answer — stale.
+                ExploitService.setStatus(this, "not rooted — tap Get root");
+                setStatus("not rooted — tap Get root", BAD);
+            } else if (s.startsWith("failed") || s.startsWith("start failed")) {
+                setStatus(s, BAD);
+            } else {
+                setStatus("not rooted — tap Get root", BAD);
+            }
         }
         updateNetButton();
         // Tail of the payload log so the screen isn't empty.
         String tail = Runner.lastLogLine(this);
-        if (tail.length() > 0 && !daemonAlive) {
+        if (tail.length() > 0) {
             append("  … " + tail);
         }
     }
@@ -304,7 +305,9 @@ public final class MainActivity extends Activity implements Runner.Log {
 
     private void confirmRun() {
         int pid = Runner.rootDaemonPid(this);
-        if (pid > 0 && Runner.daemonAlive(pid)) {
+        // channelAnswersAsRoot blocks up to its timeout — keep it short here
+        // so the dialog check doesn't freeze the UI.
+        if (pid > 0 && Runner.channelAnswersAsRoot(this, null, 3_000)) {
             new AlertDialog.Builder(this)
                     .setTitle("Re-run the exploit?")
                     .setMessage("A root daemon already exists. Each run leaves parked kernel "
