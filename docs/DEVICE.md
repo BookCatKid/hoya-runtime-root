@@ -38,12 +38,14 @@ Pipeline:
    stale `rt_mutex_waiter` on the waiter's kernel stack, `process_vm_readv`
    stamps the forged waiter over it, and the failed PI requeue walks the
    chain and `rb_erase` writes `fake_fops` into `ashmem_miscdev.fops`.
-3. **Verify.** `try_cfi_stage()` opens `/dev/ashmem` through the hijacked
-   fops, restores the clobbered `.read` slot, and probes
+3. **Verify.** `try_cfi_stage()` opens the ashmem device (the first
+   `/dev/ashmem<boot_id>` path that exists, else `/dev/ashmem`) through
+   the hijacked fops, restores the clobbered `.read` slot, and probes
    `ashmem_miscdev.fops` back.
-4. **KASLR.** The ashmem fops table gives the kernel base; every text
-   pointer in the fake table is refreshed (KASLR is normally 0 here, so
-   this usually confirms rather than corrects).
+4. **KASLR.** The ashmem fops table gives the kernel base; the text
+   pointers in the fake table are refreshed (KASLR is normally 0 here,
+   so this usually confirms rather than corrects; the llseek slot is
+   repaired separately).
 5. **Root.** The fake table now provides arbitrary kernel read/write
    (`configfs_read_file` / `configfs_write_bin_file` through a forged
    `configfs_buffer`). `install_android_root()` walks `init_task.tasks`
@@ -68,7 +70,7 @@ for the app). The documented set:
 | `GHOST_DEP_ATTEMPTS` | 1–12 deposit attempts for `slide_dep` (default 12). |
 | `GHOST_PARK=1` | Freeze the exploit threads after the trigger. Required on the deposit path: any thread exit runs futex/PI teardown on the stale state and panics. |
 | `GHOST_FOPS_TRUE=1` | Apply the 0x40 fops correction for the -0xe80 skb delta so the deposit points at the table that was actually written. |
-| `GHOST_WAITER_CORE`, `GHOST_CONSUMER_CORE`, `GHOST_OWNER_CORE`, `GHOST_MAIN_CORE` | Core pinning for the slide trio. Waiter and consumer must differ. |
+| `GHOST_WAITER_CORE`, `GHOST_OWNER_CORE`, `GHOST_MAIN_CORE` | Core pinning for the slide trio. Waiter and consumer must differ. `GHOST_CONSUMER_CORE` is honored only on the `GHOST_SIGNAL` path; the default trio pins the consumer to core 1. |
 | `GHOST_KASLR_BASE` | Seed the kernel base and skip the slide stage. |
 | `GHOST_ROUTE=slide` | Use `run_slide_deposit_route()` (forked trio + `try_cfi_stage`) instead of the main-thread pselect route. |
 | `GHOST_PMODE` | `dep` (default) or `slide` payload shape. |
@@ -90,9 +92,10 @@ run): `GHOST_GROOM_OLD`, `GHOST_SPRAY_SLABS`, `GHOST_SKB_DELTA`,
 `GHOST_NOFORGE`, `GHOST_NOCONSUME`, `GHOST_NO_STAMP`,
 `GHOST_SENTINEL`, `GHOST_LIN_MARK`, `GHOST_DUMP_PAYLOAD`.
 
-`GHOST_KASLR_BASE`, `GHOST_ROUTE`, and `GHOST_PMODE` are read by the
-`run_exploit` and route paths, not by `slide_dep`: that stage hardcodes
-base and slide 0 and always uses the DEP payload shape.
+`GHOST_KASLR_BASE` and `GHOST_ROUTE` are read by the older
+`run_exploit` path, not by `slide_dep`: that stage hardcodes base and
+slide 0 and always uses the DEP payload shape. `GHOST_PMODE` is read by
+`perf_zero`, `arbwrite`, and the fops route.
 
 ## Root mailbox
 
@@ -100,10 +103,20 @@ base and slide 0 and always uses the DEP payload shape.
 `u:r:kernel:s0` uid 0, and appends output plus `[rc=N]` to
 `<dir>/rootout`. It also writes `<dir>/rootd.pid` and `<dir>/ROOTED`.
 
-The channel is not transactional. The daemon reads then truncates
-`rootcmd`, so a command written while it is between those steps is
-lost, and a command that times out may still run later. Use one client
-at a time and do not retry a long command until it returns.
+The handoff is atomic on both sides: the app writes `rootcmd.tmp` and
+renames it over `rootcmd`, and the daemon renames `rootcmd` to
+`rootcmd.run` before reading it, then unlinks it. A command that
+arrives while one is running waits in a fresh `rootcmd` instead of
+being truncated away, so `rootcmd` is legitimately absent from `ls`
+most of the time. It reads at most 65535 bytes and reports
+`command too large` with rc 126 above that; the app rejects scripts
+over 4000 bytes first. A command that runs past 120 seconds is killed
+with SIGKILL and reported as `command timed out after 120s` with rc
+124, so a hung command cannot lock the mailbox. A command that times
+out on the app side may still be running; the app waits up to 5
+seconds for the previous `[rc=N]` before sending anything else, and
+fails the new command rather than reporting the old output. Use one
+client at a time.
 
 `<dir>` resolves, in order:
 
@@ -147,5 +160,5 @@ there (the app sets its files dir as the working directory):
 `ktrace.txt` is opened relative to the working directory, so a manual
 run from another directory writes it there.
 
-If the device panics, the last `ktrace.txt` line names the last step
-that ran, which is the best clue to where it faulted.
+If the device panics, the last `ktrace.txt` line names the last
+completed step.

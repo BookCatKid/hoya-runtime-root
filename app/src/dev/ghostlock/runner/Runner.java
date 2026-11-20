@@ -25,6 +25,18 @@ final class Runner {
 
     static final int EXPLOIT_TIMEOUT_MS = 300_000;
     static final String RUN_LOG = "ghost_run.log";
+    /** Max bytes of one mailbox script. ghost_rootd accepts 64 KiB; this
+     *  keeps a single command line well inside the network shell's limit. */
+    static final int MAX_CMD_BYTES = 4000;
+
+    /** True when the script fits one mailbox write. */
+    static boolean fitsMailbox(String script) {
+        return script.getBytes(Charset.forName("UTF-8")).length <= MAX_CMD_BYTES;
+    }
+
+    /** A command that timed out and may still be running in ghost_rootd. */
+    private static boolean outstanding;
+    private static long outstandingBase;
 
     private Runner() {
     }
@@ -244,25 +256,56 @@ final class Runner {
     /** Writes a script to files/rootcmd and waits for ghost_rootd output. */
     static synchronized String rootCmd(Context ctx, String script, long timeoutMs)
             throws IOException, InterruptedException {
+        byte[] body = script.getBytes("UTF-8");
+        if (body.length > MAX_CMD_BYTES) {
+            throw new IOException("command too long (max " + MAX_CMD_BYTES + " bytes)");
+        }
         File dir = Payload.dir(ctx);
         File cmd = new File(dir, "rootcmd");
         File out = new File(dir, "rootout");
 
+        // ghost_rootd runs one command at a time and reports completion
+        // with [rc=]. A command that timed out may still be running, and
+        // its [rc=] would otherwise be read as this command's result.
+        if (outstanding) {
+            long drainUntil = System.currentTimeMillis() + 5_000;
+            while (true) {
+                if (out.length() < outstandingBase) {
+                    // rootout was truncated: a new daemon started.
+                    outstanding = false;
+                    break;
+                }
+                if (readAppended(out, outstandingBase).indexOf("[rc=") >= 0) {
+                    outstanding = false;
+                    break;
+                }
+                if (System.currentTimeMillis() >= drainUntil) {
+                    throw new IOException("previous root command is still running");
+                }
+                Thread.sleep(300);
+            }
+        }
+
         final long baseLen = out.exists() ? out.length() : 0L;
 
-        // One write per command. ghost_rootd reads then truncates the same
-        // file, so renaming a temp file in would race with its truncate.
-        // A command written in that window can still be lost; the mailbox
-        // has no sequencing, so use one client at a time.
-        FileOutputStream os = new FileOutputStream(cmd, false);
+        // ghost_rootd renames rootcmd away before reading it, so a rename
+        // into place is atomic on both sides: the daemon never sees a
+        // half-written script and never truncates one the app is writing.
+        File tmp = new File(dir, "rootcmd.tmp");
+        FileOutputStream os = new FileOutputStream(tmp, false);
         try {
-            os.write(script.getBytes("UTF-8"));
+            os.write(body);
             if (!script.endsWith("\n")) {
                 os.write('\n');
             }
             os.flush();
         } finally {
             os.close();
+        }
+        if (!tmp.renameTo(cmd)) {
+            // Leave the temp file for the next attempt rather than
+            // executing a script the daemon cannot see.
+            throw new IOException("cannot hand off rootcmd");
         }
 
         long deadline = System.currentTimeMillis() + timeoutMs;
@@ -275,6 +318,8 @@ final class Runner {
                 return sb.toString();
             }
         }
+        outstanding = true;
+        outstandingBase = baseLen;
         return sb.toString();
     }
 

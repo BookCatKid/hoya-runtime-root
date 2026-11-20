@@ -57,12 +57,6 @@ public final class MainActivity extends Activity {
         append("payload: " + Payload.dir(this) + "/" + Payload.NAME);
         refreshStatusAsync();
         startPoller();
-        if (ExploitService.netShellOn(this)) {
-            // net_wanted.txt says the user wants the shell, but the
-            // listener died with the previous process. Start the service
-            // (null action) so it binds again.
-            startService(new Intent(this, ExploitService.class));
-        }
     }
 
     @Override
@@ -70,6 +64,17 @@ public final class MainActivity extends Activity {
         super.onResume();
         refreshStatusAsync();
         startPoller();
+        if (ExploitService.netShellOn(this)) {
+            // net_wanted.txt says the user wants the shell, but the
+            // listener died with the previous process. Ask for it again
+            // from onResume: onCreate runs while the app is still
+            // backgrounded and startService is rejected there.
+            try {
+                startService(new Intent(this, ExploitService.class));
+            } catch (IllegalStateException e) {
+                append("network shell not restarted: " + e.getMessage());
+            }
+        }
     }
 
     @Override

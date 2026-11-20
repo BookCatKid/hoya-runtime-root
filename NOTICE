@@ -8,10 +8,11 @@ on the target device.
 Running it on devices you do not own is illegal in most jurisdictions.
 
 - The exploit is probabilistic and can panic or corrupt the kernel.
-- Root is per-boot. App data, including the network-shell choice,
-  persists until you clear it.
+- Root is per-boot. The recorded root state is wiped on the first app
+  launch after a reboot; app data and the network-shell choice persist.
 - If you redistribute this or a modified version, keep the license and
-  attribution notices (GPL-3.0; upstream Apache-2.0).
+  attribution notices (GPL-3.0; upstream Apache-2.0 and MIT). See
+  `LICENSES/`.
 
 Derived in part from NebuSec/CyberMeowfia `IonStack` (Apache-2.0,
 CVE-2026-43499). See `CREDITS.md` for upstream terms.

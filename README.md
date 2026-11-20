@@ -19,7 +19,8 @@ locked and `dm-verity` is untouched.
 | `app/` | "GhostLock Runner" APK, plain Java, no Gradle |
 | `docs/DEVICE.md` | Device facts, exploit recipe, tuning knobs, root mailbox |
 | `docs/APP.md` | App architecture, build and file layout |
-| `CREDITS.md` | Upstream provenance (NebuSec/CyberMeowfia IonStack, Apache-2.0) |
+| `app/store/` | Store icons for LAT: `tablet_large_icon.png` (512x512, transparent), `fire_tv_icon.png` (1280x720, opaque), and their SVG sources |
+| `CREDITS.md` | Upstream provenance (NebuSec/CyberMeowfia IonStack, Apache-2.0; KernelSnitch, MIT) |
 
 ## Build
 
@@ -37,8 +38,9 @@ No binaries are committed.
   when set, otherwise from `exploit/build/ghostpw` (so run
   `exploit/build.sh` first).
 - On the first run `app/build.sh` creates a local signing key at
-  `$HOME/.hoya-runner/runner.jks` (`KS`, `KS_PASS` override it). If
-  build-tools' bundled `d8` is broken, it downloads a stock `r8.jar`
+  `$HOME/.hoya-runner/runner.jks` (`KS`, `KS_PASS` override it; the
+  default password is `android`, fine only for a local sideload key).
+  If build-tools' bundled `d8` is broken, it downloads a stock `r8.jar`
   into `$HOME/.hoya-runner`.
 - `VERSION_CODE` / `VERSION_NAME` override the APK version (default
   `1` / `0.1`). Bump `VERSION_CODE` for each LAT upload.

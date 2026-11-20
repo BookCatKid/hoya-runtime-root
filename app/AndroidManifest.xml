@@ -44,10 +44,14 @@
             android:name=".ExploitService"
             android:exported="false" />
 
-        <!-- Headless trigger: adb shell am broadcast -a dev.ghostlock.runner.RUN -->
+        <!-- Headless trigger: adb shell am broadcast -a dev.ghostlock.runner.RUN
+             android:permission gates delivery: only a sender holding DUMP
+             (adb shell, root) may fire it. Any other app is rejected by
+             the system, so it cannot start a panicky exploit run. -->
         <receiver
             android:name=".RunReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="dev.ghostlock.runner.RUN" />
             </intent-filter>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GhostLock Runner app icon, 512x512, transparent background.
+     Art matches app/res/drawable/ic_launcher_foreground.xml (dome body,
+     wavy tail, two eyes, small smile), redrawn with sane spacing and
+     padding so it reads at small sizes. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
+     viewBox="0 0 512 512">
+  <g transform="translate(0,8)">
+    <!-- body: dome over a wavy tail, inset for safe margin -->
+    <path fill="#4ADE80"
+          d="M256,96
+             C176,96 132,152 132,224
+             L132,404
+             L172,364
+             L212,404
+             L256,364
+             L300,404
+             L340,364
+             L380,404
+             L380,224
+             C380,152 336,96 256,96 Z" />
+    <!-- eyes -->
+    <ellipse cx="216" cy="220" rx="26" ry="31" fill="#0F172A" />
+    <ellipse cx="296" cy="220" rx="26" ry="31" fill="#0F172A" />
+    <!-- smile -->
+    <path fill="none" stroke="#0F172A" stroke-width="11"
+          stroke-linecap="round" stroke-linejoin="round"
+          d="M236,282 q20,20 40,0" />
+  </g>
+</svg>

@@ -1,11 +1,13 @@
 # Credits and provenance
 
 Upstream licenses are preserved; see LICENSE (GPL-3.0) for the combined
-work and `LICENSES/Apache-2.0.txt` for the upstream exploit.
+work, `LICENSES/Apache-2.0.txt` for the upstream exploit, and
+`LICENSES/MIT-KernelSnitch.txt` for the leak helpers.
 
 ## Upstream exploit: GhostLock / IonStack (CVE-2026-43499)
 
-- **Source**: `NebuSec/CyberMeowfia`, `IonStack/CVE-2026-43499/exploit/`
+- **Source**: https://github.com/NebuSec/CyberMeowfia,
+  `IonStack/CVE-2026-43499/exploit/`
 - **Authors**: NebuSec / CyberMeowfia
 - **License**: Apache License 2.0 (`LICENSES/Apache-2.0.txt`)
 - **CVE**: CVE-2026-43499, Linux kernel `futex` priority-inheritance requeue
@@ -15,10 +17,10 @@ work and `LICENSES/Apache-2.0.txt` for the upstream exploit.
 ## KernelSnitch
 
 - `exploit/src/kernelsnitch/`: ASLR slide leak helpers derived from
-  KernelSnitch (public research tooling for leaking kernel pointers via
-  timing side channels). Bundled headers only; `futex_hash.h` carries the
-  Bob Jenkins and Jozsef Kadlecsik copyright notices. See upstream for the
-  full license.
+  KernelSnitch (https://github.com/isec-tugraz/KernelSnitch, NDSS 2025).
+  Bundled headers only; `futex_hash.h` carries the Bob Jenkins and
+  Jozsef Kadlecsik copyright notices. MIT License, Copyright 2024 Lukas
+  Maar (`LICENSES/MIT-KernelSnitch.txt`).
 
 ## Device-specific modifications (this repository)
 

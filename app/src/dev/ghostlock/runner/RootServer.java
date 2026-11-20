@@ -21,6 +21,7 @@ final class RootServer {
     private static volatile boolean running;
     private static volatile boolean serving;
     private static ServerSocket server;
+    private static Thread thread;
     private static final java.util.Set<Socket> clients =
             java.util.Collections.synchronizedSet(new java.util.HashSet<Socket>());
 
@@ -28,10 +29,12 @@ final class RootServer {
     }
 
     static synchronized boolean start(final Context ctx, final Runner.Log log) {
-        if (running && server != null && !server.isClosed()) {
+        // running is not enough: an accept error leaves the socket open
+        // with no accept loop, and returning early would never rebind.
+        if (running && serving && server != null && !server.isClosed()) {
             return true;
         }
-        running = false;
+        closeServer();
         ServerSocket bound = null;
         try {
             bound = new ServerSocket();
@@ -60,19 +63,18 @@ final class RootServer {
                         safeLog(log, "  connect: nc " + ip + " " + PORT);
                     }
                     safeLog(log, "WARNING: unauthenticated shell on your LAN");
-                    while (running && !srv.isClosed()) {
+                    while (!srv.isClosed()) {
                         final Socket s;
                         try {
                             s = srv.accept();
                         } catch (IOException e) {
-                            if (!running || srv.isClosed()) {
-                                break;
+                            if (!srv.isClosed()) {
+                                safeLog(log, "accept error: " + e);
                             }
-                            safeLog(log, "accept error: " + e);
                             break;
                         }
                         synchronized (clients) {
-                            if (!running || clients.size() >= MAX_CLIENTS) {
+                            if (srv.isClosed() || clients.size() >= MAX_CLIENTS) {
                                 try {
                                     s.close();
                                 } catch (IOException ignored) {
@@ -85,7 +87,7 @@ final class RootServer {
                             @Override
                             public void run() {
                                 try {
-                                    if (running) {
+                                    if (!srv.isClosed()) {
                                         handle(ctx, s, log);
                                     }
                                 } finally {
@@ -99,13 +101,46 @@ final class RootServer {
                         }, "root-client").start();
                     }
                 } finally {
-                    serving = false;
+                    try {
+                        srv.close();
+                    } catch (IOException ignored) {
+                    }
+                    // Only the current generation may clear the state.
+                    if (server == srv) {
+                        serving = false;
+                        running = false;
+                        server = null;
+                    }
                 }
             }
         }, "root-server");
         t.setDaemon(true);
+        thread = t;
         t.start();
         return true;
+    }
+
+    private static void closeServer() {
+        ServerSocket srv = server;
+        server = null;
+        running = false;
+        serving = false;
+        thread = null;
+        if (srv != null) {
+            try {
+                srv.close();
+            } catch (IOException ignored) {
+            }
+        }
+        synchronized (clients) {
+            for (Socket s : clients) {
+                try {
+                    s.close();
+                } catch (IOException ignored) {
+                }
+            }
+            clients.clear();
+        }
     }
 
     private static void safeLog(Runner.Log log, String s) {
@@ -122,22 +157,16 @@ final class RootServer {
     }
 
     static synchronized void stop() {
-        running = false;
-        serving = false;
-        try {
-            if (server != null) {
-                server.close();
+        Thread t = thread;
+        closeServer();
+        // The accept loop wakes on the closed socket. It never takes the
+        // class lock, so this join cannot deadlock.
+        if (t != null && t != Thread.currentThread()) {
+            try {
+                t.join(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
-        } catch (IOException ignored) {
-        }
-        synchronized (clients) {
-            for (Socket s : clients) {
-                try {
-                    s.close();
-                } catch (IOException ignored) {
-                }
-            }
-            clients.clear();
         }
     }
 
@@ -167,6 +196,12 @@ final class RootServer {
                 if (line.length() == 0) {
                     continue;
                 }
+                if (!Runner.fitsMailbox(line)) {
+                    out.write("command too long (max " + Runner.MAX_CMD_BYTES
+                            + " bytes)\n---\n");
+                    out.flush();
+                    continue;
+                }
                 if (!root) {
                     // The user may have just rooted from here.
                     root = Runner.channelAnswersAsRoot(ctx, 2_000);
@@ -180,7 +215,8 @@ final class RootServer {
                     try {
                         result = Runner.rootCmd(ctx, line, 60_000);
                     } catch (Exception e) {
-                        result = "error: " + e + "\n";
+                        String m = e.getMessage();
+                        result = "error: " + (m != null ? m : e.toString()) + "\n";
                     }
                     if (result.trim().length() == 0) {
                         // The command may still be running as root. Never
