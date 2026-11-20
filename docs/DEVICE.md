@@ -58,6 +58,36 @@ Probabilistic: 12 deposit attempts per run, and a failed attempt can
 panic the kernel. Reboot before retrying; each failed run leaves parked
 kernel threads behind.
 
+### Measured success rate
+
+10 clean-boot runs on one Echo Show 15 (`PS75751.7809N`, kernel
+`5.4.86-ab7`), 8 rooted, 80%:
+
+| Attempt that landed | Runs |
+|---|---|
+| 1 | 3 |
+| 2, 3, 5, 9, 11 | 1 each |
+| none (12 misses) | 2 |
+
+Successful runs took 62–163s. The two failures took 177s and 187s, used
+all 12 attempts, and ended at `cfi miss attempt=12 step=4`: the deposit
+did not land in the target slot and `try_cfi_stage()` rejected it. Both
+reported `failed. Reboot before retrying`, and neither panicked.
+
+Misses in the full log cluster at step 4 (`cfi step4 fd=3 pre_rb=0
+pre_fops=0000000000000000`), so a miss is a deposit that did not take,
+not a wrong address. Ten runs on one device is a small sample.
+
+Two log lines are easy to misread:
+
+- `slide child park r=1 wr=0` appears in successful runs as well; it is
+  the cleanup thread parking after root is established, not a failure.
+- `slide_dep cfi ok attempt=N` is a landed deposit;
+  `slide_dep cfi miss attempt=N step=4` is a miss.
+
+Reproduce with `tools/measure.sh`, which reboots between runs and
+records each outcome to `tools/results/runs.csv`.
+
 ## Run knobs
 
 Set through the environment (`Runner.java` sets `GHOST_STAGE`,

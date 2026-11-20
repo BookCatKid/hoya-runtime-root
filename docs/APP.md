@@ -51,9 +51,11 @@ apps targeting API 29 or newer).
    bound and its accept loop is running.
 6. No boot receiver: auto-running a panicky exploit on every boot could
    boot-loop the device, so rooting is always manual (**Get root** or
-   `am broadcast -a dev.ghostlock.runner.RUN`, which only adb shell and
-   root can deliver because the receiver requires
-   `android.permission.DUMP`).
+   `am broadcast -a dev.ghostlock.runner.RUN -f 0x01000000`, which only
+   adb shell and root can deliver because the receiver requires
+   `android.permission.DUMP`). The `-f 0x01000000` flag
+   (`FLAG_RECEIVER_INCLUDE_BACKGROUND`) is required: without it the
+   system drops the broadcast as background execution and no run starts.
 7. On completion the service beeps (chime on success, buzz on failure
    or timeout), writes the result to `exploit_status.txt`, and reopens
    the activity only if the display is interactive (dozing surfaces abort
@@ -99,7 +101,8 @@ override).
 - `RootServer.java`: TCP shell (app context, upgrades to root mailbox).
 - `MainActivity.java`: status view, log console, shell dialog; closes
   itself when a run starts.
-- `RunReceiver.java`: adb/headless trigger (`am broadcast ... RUN`).
+- `RunReceiver.java`: adb/headless trigger
+  (`am broadcast ... RUN -f 0x01000000`).
 
 ## Files in the app's private files dir
 

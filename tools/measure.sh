@@ -64,9 +64,11 @@ status() {
     adbs shell "run-as $pkg cat files/exploit_status.txt" | tr -d '\r'
 }
 
-# The two lines that say why a run landed where it did.
+# The two lines that say why a run landed where it did, read only from
+# the bytes this run appended. An old log would otherwise repeat the
+# previous run's values and look like a consistent failure.
 log_field() {
-    adbs shell "run-as $pkg grep -o '$1' files/ghost_run.log 2>/dev/null | tail -1" \
+    adbs shell "run-as $pkg tail -c +$((log_before + 1)) files/ghost_run.log 2>/dev/null | grep -o '$1' | tail -1" \
         | tr -d '\r'
 }
 
@@ -98,9 +100,35 @@ for i in $(seq 1 "$runs"); do
 
     # Clear any stale status so an old outcome cannot be read as this run's.
     adbs shell "run-as $pkg rm -f files/exploit_status.txt" >/dev/null 2>&1
+    log_before=$(adbs shell "run-as $pkg stat -c %s files/ghost_run.log" 2>/dev/null | tr -d '\r')
+    [ -n "$log_before" ] || log_before=0
 
     start=$(date +%s)
-    adbs shell "am broadcast -a $pkg.RUN" >/dev/null 2>&1
+    # FLAG_RECEIVER_INCLUDE_BACKGROUND (0x01000000): without it the system
+    # drops the implicit broadcast with "Background execution not allowed"
+    # and the run never starts, which reads as a silent failure.
+    adbs shell "am broadcast -a $pkg.RUN -f 0x01000000" >/dev/null 2>&1
+
+    # The trigger must actually start something. If ghost_run.log did not
+    # grow and no status appeared, this run never happened: do not record
+    # an outcome for it, or an untriggered run looks like a failure.
+    started=0
+    for _ in 1 2 3 4 5 6; do
+        sleep 5
+        log_now=$(adbs shell "run-as $pkg stat -c %s files/ghost_run.log" 2>/dev/null | tr -d '\r')
+        [ -n "$log_now" ] || log_now=0
+        if [ "$log_now" -gt "$log_before" ] || [ -n "$(status)" ]; then
+            started=1
+            break
+        fi
+    done
+    if [ "$started" = "0" ]; then
+        echo "trigger did not start a run; not recording an outcome"
+        printf '%d,%s,%s,not started,0,,,%s\n' "$i" \
+            "$(date -u +%FT%TZ)" "$bid" "" >> "$csv"
+        bad=$((bad + 1))
+        continue
+    fi
 
     outcome=""
     deadline=$(( start + result_wait ))
@@ -131,7 +159,12 @@ for i in $(seq 1 "$runs"); do
     [ -n "$outcome" ] || outcome=timeout
 
     elapsed=$(( $(date +%s) - start ))
-    park=$(log_field 'slide child park r=[0-9]* wr=[0-9]*')
+    # "slide child park r=1 wr=0" shows up in successful runs too (it is
+    # the cleanup thread), so it is not a failure signal. The deposit
+    # handshake and the cfi line are what distinguish the two outcomes:
+    # "slide child signal r=1 wr=1" then "slide_dep cfi ok" means the
+    # deposit landed.
+    park=$(log_field 'slide child signal r=[0-9]* wr=[0-9]*')
     cfi=$(log_field 'slide_dep cfi ok attempt=[0-9]*')
 
     printf '%-10s %3ds  %s %s\n' "$outcome" "$elapsed" "$park" "$cfi"

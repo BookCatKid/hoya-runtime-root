@@ -1,0 +1,11 @@
+run,utc,boot_id,outcome,seconds,park,cfi,status
+1,2026-11-20T09:19:23Z,0e7d394a-7b7f-4f02-acd2-78838177dfe5,rooted,130,slide child signal r=1 wr=1,slide_dep cfi ok attempt=9,ROOTED pid=23013
+2,2026-11-20T09:21:04Z,aad1a4c7-4d34-41c1-916e-136dbe97b882,rooted,64,slide child signal r=1 wr=1,slide_dep cfi ok attempt=1,ROOTED pid=10738
+3,2026-11-20T09:24:19Z,32cd5f14-33e7-4b92-8a7f-896d4eb0d44a,rooted,163,slide child signal r=1 wr=1,slide_dep cfi ok attempt=11,ROOTED pid=25307
+4,2026-11-20T09:28:05Z,c2512c32-ee0c-4b30-97aa-d58c35d42f9f,failed,177,slide child signal r=1 wr=1,,failed. Reboot before retrying
+5,2026-11-20T09:29:50Z,4f06e37a-3a03-4524-b40d-50e1d827235d,rooted,64,slide child signal r=1 wr=1,slide_dep cfi ok attempt=1,ROOTED pid=10797
+6,2026-11-20T09:31:28Z,79045340-434c-4674-8e77-0985d49b6a3d,rooted,62,slide child signal r=1 wr=1,slide_dep cfi ok attempt=1,ROOTED pid=10229
+7,2026-11-20T09:35:11Z,0fb30336-aacc-490f-b989-da943f3a2131,failed,187,slide child signal r=1 wr=1,,failed. Reboot before retrying
+8,2026-11-20T09:37:34Z,38015ee4-99ff-4cb4-b83c-0b864a93d40a,rooted,91,slide child signal r=1 wr=1,slide_dep cfi ok attempt=5,ROOTED pid=16325
+9,2026-11-20T09:39:40Z,988c724e-cb94-4781-81d6-901b64d33953,rooted,86,slide child signal r=1 wr=1,slide_dep cfi ok attempt=3,ROOTED pid=13839
+10,2026-11-20T09:41:35Z,3417a999-d6c7-407e-96c2-ab5dd674aae5,rooted,80,slide child signal r=1 wr=1,slide_dep cfi ok attempt=2,ROOTED pid=12295

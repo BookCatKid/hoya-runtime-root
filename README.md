@@ -101,9 +101,9 @@ Read these before running anything.
   is up, port 4444 hands out a uid 0 shell to anyone who can reach the
   device on the LAN. It is wildcard-bound on purpose. Enable it only on
   a network you trust, and turn it off when you are done.
-- **The exploit is probabilistic and its success rate is not measured
-  yet.** Do not assume it will work, and do not assume it will fail
-  cleanly.
+- **The exploit is probabilistic.** Measured at about 8 in 10 runs on
+  one device, with a run taking 1 to 3 minutes. A failure needs a reboot
+  before retrying.
 - **No uninstall path for root.** Root is runtime-only, so a reboot is
   the reset. There is nothing to uninstall, and nothing to clean up.
 
@@ -115,10 +115,10 @@ Read these before running anything.
    `oom_score_adj=0`, which breaks the exploit's spray. `ExploitService`
    (a foreground service) runs the payload instead, at the adj class the
    grooming counts are tuned for.
-4. Wait. A run takes 1–5 minutes and is probabilistic. The device may
-   beep when it finishes, and the app reopens itself if the screen is on.
-   If nothing answers after 5 minutes the app reports that and leaves the
-   payload running; check the log before rebooting.
+4. Wait. A run takes 1 to 3 minutes and succeeds about 8 times in 10.
+   The device may beep when it finishes, and the app reopens itself if
+   the screen is on. If nothing answers after 5 minutes the app reports
+   that and leaves the payload running; check the log before rebooting.
 5. If it fails, **reboot before retrying**. Failed runs leave parked
    kernel threads; stacking runs without a reboot makes panics likelier.
 6. On success the app shows **ROOTED**. **Root shell** and **Network
@@ -126,13 +126,34 @@ Read these before running anything.
    root (`nc <device-ip> 4444`; unauthenticated, so enable it
    deliberately).
 
-Headless trigger over adb: `am broadcast -a dev.ghostlock.runner.RUN`, which
-only adb shell and root can deliver.
+Headless trigger over adb:
+
+```sh
+adb shell am broadcast -a dev.ghostlock.runner.RUN -f 0x01000000
+```
+
+The `-f 0x01000000` flag (`FLAG_RECEIVER_INCLUDE_BACKGROUND`) is
+required. Without it the system drops the broadcast with "Background
+execution not allowed" and nothing runs. Only adb shell and root can
+deliver it.
 
 ## Success rate
 
-Not measured yet. The numbers below are what `tools/measure.sh` reports
-once there are enough runs to mean anything; two runs is not a rate.
+Measured on one Echo Show 15, 10 clean-boot runs, one run per boot:
+
+| Runs | Rooted | Rate |
+|---|---|---|
+| 10 | 8 | 80% |
+
+Successes landed on attempt 1 (three times), 2, 3, 5, 9 and 11. The two
+failures each used all 12 attempts and ended at `cfi miss attempt=12
+step=4`, meaning the deposit never landed in the target slot; the CFI
+verification caught it and the run reported `failed. Reboot before
+retrying`. Neither failure panicked.
+
+A run that fails needs a reboot before the next attempt. Ten runs is a
+small sample, and this is one device on one Fire OS build, so treat 80%
+as a rough figure rather than a guarantee.
 
 ```sh
 tools/measure.sh 10
@@ -140,14 +161,17 @@ tools/measure.sh 10
 
 Each run reboots the device first, triggers the run, and records the
 outcome to `tools/results/runs.csv` as `rooted`, `failed`, `no result`,
-`panic` or `timeout`, along with the `slide child park r=… wr=…` line and
-the elapsed time. Reboots are not optional: a failed run leaves parked
+`panic`, `timeout` or `not started`, along with the
+`slide child signal r=… wr=…` line, the attempt that landed, and the
+elapsed time. Reboots are not optional: a failed run leaves parked
 kernel threads, so a run without a fresh boot would measure something
 else.
 
-| Runs | Rooted | Rate |
-|---|---|---|
-| 0 | 0 | not measured |
+Two lines in `ghost_run.log` are easy to misread. `slide child park
+r=1 wr=0` also appears in successful runs, because it is the cleanup
+thread parking after root is established, so it does not mean failure.
+`slide_dep cfi ok attempt=N` is the line that marks a landed deposit;
+`slide_dep cfi miss attempt=N step=4` is the line that marks a miss.
 
 ## The exploit
 
