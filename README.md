@@ -16,9 +16,10 @@ self-contained Android app that runs it on the device.
 >   any moment, including during an update or while something is
 >   writing. Do not run it on a device you depend on. Do not run it on a
 >   device you do not own. Authorized use only, see [NOTICE](NOTICE).
-> - **Limited support.** Issues are read when there is time, and there is
->   no guarantee of a fix. A pull request gets looked at much sooner than
->   an issue: if you can, send the change instead of the report.
+> - **Support.** Issues and pull requests are welcome. A patch that
+>   fixes the problem tends to land faster than a report that describes
+>   it, so send the change if you can, but an issue is a fine way to
+>   start.
 > - **Unverified beyond one device.** It has been run on one Echo Show
 >   15. A matching build fingerprint is not a promise that it works on
 >   yours.
@@ -80,17 +81,13 @@ own Amazon developer account and your own LAT app; this project cannot
 ship one for you. Upload the APK to your LAT app, then install it on the
 device through the Appstore.
 
-LAT is the step most likely to fail, and it is outside this project's
-control: Amazon's review, device compatibility rules and permission
-handling can change or reject the app. If LAT refuses it, that is not
-something this repository can fix.
-
 ## Limitations
 
 Read these before running anything.
 
-- **Root is per-boot.** A reboot clears it. There is no persistent root
-  and no way to make one without touching the bootloader.
+- **Root is per-boot.** A reboot clears it. As far as I know, there is no
+  persistent root and no way to make one without touching the bootloader;
+  anything is possible, but nothing here tries.
 - **Force-stopping the app kills root.** `ghost_rootd` reparents to
   init but stays in the app's cgroup, so force-stop or a normal kill
   takes the daemon with it. Root is then gone until you run the exploit
@@ -103,9 +100,7 @@ Read these before running anything.
 - **The network shell is an unauthenticated root listener.** When root
   is up, port 4444 hands out a uid 0 shell to anyone who can reach the
   device on the LAN. It is wildcard-bound on purpose. Enable it only on
-  a network you trust, and turn it off when you are done. Without root
-  it still gives a shell as the app's uid, which can read the app's
-  files.
+  a network you trust, and turn it off when you are done.
 - **The exploit is probabilistic and its success rate is not measured
   yet.** Do not assume it will work, and do not assume it will fail
   cleanly.
@@ -177,15 +172,18 @@ and what the logs mean.
 
 ## Contributing
 
-Send a pull request, not an issue. A patch that fixes the problem gets
-merged much faster than a report that describes it, especially for a
-project this rough: by the time an issue is read, the useful work in it
-is usually the diff anyway.
+Issues and pull requests are both welcome.
 
-If you must open an issue, include what device and build fingerprint you
-are on, the relevant `ghost_run.log` tail, and the `slide child park
-r=… wr=…` line. Without those it is hard to tell a real bug from the
-exploit's usual probabilistic failure.
+A pull request usually gets merged faster than an issue gets fixed,
+simply because the work is already done, so if you know the fix, send
+it. If you would rather report the problem, that is useful too: a clear
+report is often what makes a fix possible.
+
+For anything about a run going wrong, include your device and build
+fingerprint, the relevant `ghost_run.log` tail, and the
+`slide child park r=… wr=…` line. Those three turn "it didn't work" into
+something actionable, since the exploit fails probabilistically by
+design.
 
 ## License
 

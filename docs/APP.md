@@ -78,7 +78,9 @@ any of those.
 ./app/build.sh        # aapt2 + javac + d8/r8 + apksigner
 ```
 
-Then upload `app/hoya-runner.apk` to LAT.
+Then upload `app/hoya-runner.apk` to your own LAT app. As far as I know
+LAT is the only route onto the device; the account and the LAT app have
+to be yours, this project cannot ship one.
 
 Requires `ANDROID_SDK_ROOT` (or the default `~/Library/Android/sdk`) with
 build-tools 34.0.0 and platform android-30. The script probes the bundled

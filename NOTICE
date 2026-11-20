@@ -10,6 +10,8 @@ Running it on devices you do not own is illegal in most jurisdictions.
 - The exploit is probabilistic and can panic or corrupt the kernel.
 - Root is per-boot. The recorded root state is wiped on the first app
   launch after a reboot; app data and the network-shell choice persist.
+  As far as I know there is no persistent root on this device without
+  touching the bootloader.
 - If you redistribute this or a modified version, keep the license and
   attribution notices (GPL-3.0; upstream Apache-2.0 and MIT). See
   `LICENSES/`.
