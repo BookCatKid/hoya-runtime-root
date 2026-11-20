@@ -72,7 +72,8 @@ log_field() {
 
 if [ "${INSTALL:-0}" = "1" ]; then
     echo "installing $root/app/hoya-runner.apk"
-    adb install -r "$root/app/hoya-runner.apk" || { echo "install failed" >&2; exit 1; }
+    adb -s "$serial" install -r "$root/app/hoya-runner.apk" \
+        || { echo "install failed" >&2; exit 1; }
 fi
 
 ok=0
