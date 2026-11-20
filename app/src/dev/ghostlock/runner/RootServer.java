@@ -3,7 +3,6 @@ package dev.ghostlock.runner;
 import android.content.Context;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -17,79 +16,142 @@ import java.util.Enumeration;
 /** TCP shell: app-context commands until ghost_rootd answers, then uid 0. */
 final class RootServer {
 
-    private static final int PORT = 4444;
+    static final int PORT = 4444;
+    private static final int MAX_CLIENTS = 8;
     private static volatile boolean running;
+    private static volatile boolean serving;
     private static ServerSocket server;
+    private static final java.util.Set<Socket> clients =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<Socket>());
 
     private RootServer() {
     }
 
-    static synchronized boolean isRunning() {
-        return running;
-    }
-
-    static synchronized void start(final Context ctx, final Runner.Log log) {
-        if (running) {
-            return;
+    static synchronized boolean start(final Context ctx, final Runner.Log log) {
+        if (running && server != null && !server.isClosed()) {
+            return true;
         }
+        running = false;
+        ServerSocket bound = null;
+        try {
+            bound = new ServerSocket();
+            bound.setReuseAddress(true);
+            bound.bind(new java.net.InetSocketAddress(PORT));
+        } catch (IOException e) {
+            if (bound != null) {
+                try {
+                    bound.close();
+                } catch (IOException ignored) {
+                }
+            }
+            safeLog(log, "network shell failed: " + e);
+            return false;
+        }
+        final ServerSocket srv = bound;
+        server = srv;
         running = true;
+        serving = true;
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    server = new ServerSocket(PORT);
-                    log.line("network shell listening on port " + PORT);
+                    safeLog(log, "network shell listening on port " + PORT);
                     for (String ip : lanIps()) {
-                        log.line("  connect:  nc " + ip + " " + PORT);
+                        safeLog(log, "  connect: nc " + ip + " " + PORT);
                     }
-                    log.line("WARNING: unauthenticated root shell on your LAN");
-                } catch (IOException e) {
-                    log.line("network shell failed: " + e);
-                    running = false;
-                    return;
-                }
-                while (running) {
-                    try {
-                        final Socket s = server.accept();
+                    safeLog(log, "WARNING: unauthenticated shell on your LAN");
+                    while (running && !srv.isClosed()) {
+                        final Socket s;
+                        try {
+                            s = srv.accept();
+                        } catch (IOException e) {
+                            if (!running || srv.isClosed()) {
+                                break;
+                            }
+                            safeLog(log, "accept error: " + e);
+                            break;
+                        }
+                        synchronized (clients) {
+                            if (!running || clients.size() >= MAX_CLIENTS) {
+                                try {
+                                    s.close();
+                                } catch (IOException ignored) {
+                                }
+                                continue;
+                            }
+                            clients.add(s);
+                        }
                         new Thread(new Runnable() {
                             @Override
                             public void run() {
-                                handle(ctx, s, log);
+                                try {
+                                    if (running) {
+                                        handle(ctx, s, log);
+                                    }
+                                } finally {
+                                    clients.remove(s);
+                                    try {
+                                        s.close();
+                                    } catch (IOException ignored) {
+                                    }
+                                }
                             }
                         }, "root-client").start();
-                    } catch (IOException e) {
-                        if (running) {
-                            log.line("accept error: " + e);
-                        }
                     }
+                } finally {
+                    serving = false;
                 }
             }
         }, "root-server");
         t.setDaemon(true);
         t.start();
+        return true;
+    }
+
+    private static void safeLog(Runner.Log log, String s) {
+        try {
+            log.line(s);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** True while a socket is bound and the accept loop is running. */
+    static boolean listening() {
+        ServerSocket srv = server;
+        return running && serving && srv != null && !srv.isClosed();
     }
 
     static synchronized void stop() {
         running = false;
+        serving = false;
         try {
             if (server != null) {
                 server.close();
             }
         } catch (IOException ignored) {
         }
+        synchronized (clients) {
+            for (Socket s : clients) {
+                try {
+                    s.close();
+                } catch (IOException ignored) {
+                }
+            }
+            clients.clear();
+        }
     }
 
     private static void handle(Context ctx, Socket s, Runner.Log log) {
         String peer = s.getInetAddress().getHostAddress();
-        log.line("client connected: " + peer);
-        boolean root = Runner.channelAnswersAsRoot(ctx, null, 3_000);
+        safeLog(log, "client connected: " + peer);
+        boolean root = Runner.channelAnswersAsRoot(ctx, 3_000);
         try {
             s.setSoTimeout(0);
             BufferedReader in = new BufferedReader(new InputStreamReader(
                     s.getInputStream(), Charset.forName("UTF-8")));
             OutputStreamWriter out = new OutputStreamWriter(s.getOutputStream(),
                     Charset.forName("UTF-8"));
-            out.write("ghost shell : " + (root
+            out.write("ghost shell: " + (root
                     ? "ROOT (via ghost_rootd, uid 0)"
                     : "app context (no root yet, runs as this app's uid)")
                     + "\none command per line, 'exit' to quit\n"
@@ -106,8 +168,8 @@ final class RootServer {
                     continue;
                 }
                 if (!root) {
-                    // Cheap re-check: the user may have just rooted from here.
-                    root = Runner.channelAnswersAsRoot(ctx, null, 2_000);
+                    // The user may have just rooted from here.
+                    root = Runner.channelAnswersAsRoot(ctx, 2_000);
                     if (root) {
                         out.write("[ghost_rootd appeared. Switching to uid 0]\n");
                         out.flush();
@@ -116,14 +178,15 @@ final class RootServer {
                 String result;
                 if (root) {
                     try {
-                        result = Runner.rootCmd(ctx, line, 60_000, null);
+                        result = Runner.rootCmd(ctx, line, 60_000);
                     } catch (Exception e) {
                         result = "error: " + e + "\n";
                     }
                     if (result.trim().length() == 0) {
-                        root = false;
-                        result = "(no response. Root daemon stopped answering; "
-                                + "falling back to app context)\n" + execLocal(ctx, line);
+                        // The command may still be running as root. Never
+                        // repeat it in app context: a destructive line
+                        // would execute twice.
+                        result = "(no output yet; the root command may still be running)\n";
                     }
                 } else {
                     result = execLocal(ctx, line);
@@ -138,7 +201,7 @@ final class RootServer {
                 s.close();
             } catch (IOException ignored) {
             }
-            log.line("client disconnected: " + peer);
+            safeLog(log, "client disconnected: " + peer);
         }
     }
 
@@ -168,7 +231,7 @@ final class RootServer {
             reader.start();
             boolean finished = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
             if (!finished) {
-                p.destroy();
+                p.destroyForcibly();
                 reader.join(1000);
                 return new String(buf.toByteArray(), "UTF-8") + "\n(timed out after 30s)\n";
             }

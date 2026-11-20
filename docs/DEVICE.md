@@ -2,20 +2,21 @@
 
 | Property | Value |
 |---|---|
-| Model | Amazon Echo Show 15 (1st gen) |
-| Device codename | `hoya_ftv` (portrait variant "hoya") |
-| Platform | Amlogic POP1-C / T7, ARM64, 8 cores |
-| Fire OS build | `PS75741.7082N` (target dir and payload fingerprint) |
+| Model | Amazon Echo Show 15 (1st gen), `AEOHY` |
+| Device codename | `hoya_ftv` (`hoya`) |
+| Platform | Amlogic T7 (`amlogic, t7`), ARM64, 8 cores |
+| Fire OS build | `PS75751.7809N` |
 | Android release | 9 (API 28) |
 | Security patch | 2026-03-01 |
 | Kernel | `5.4.86-ab7` |
-| Bootloader | locked |
-| dm-verity | enforcing |
+| Bootloader | no fastboot path; cmdline has `androidboot.unlocked_kernel=false` |
+| dm-verity | `eio` (`ro.boot.veritymode=eio`; I/O errors are returned) |
 | SELinux | enforcing (set permissive by the root chain) |
 
 `exploit/src/targets/hoya-PS75741.7082N/` holds the offsets and build
-constants for this exact kernel; the offsets are not portable to other
-Fire OS builds.
+constants for this kernel. The directory keeps the upstream target label
+(`hoya-PS75741.7082N`); the device build string is `PS75751.7809N`. The
+offsets are not portable to other Fire OS builds.
 
 ## Exploit summary
 
@@ -48,7 +49,7 @@ Pipeline:
    `configfs_buffer`). `install_android_root()` walks `init_task.tasks`
    for the helper child, widens the slab caches' usercopy whitelists,
    patches the child's `cred` (uid/gid 0, full caps, kernel SELinux SID)
-   and blank's its seccomp state, then that child sets
+   and blanks its seccomp state, then that child sets
    `selinux_enforcing=0`, forks `ghost_rootd` and exits.
 
 Probabilistic: 12 deposit attempts per run, and a failed attempt can
@@ -57,12 +58,13 @@ kernel threads behind.
 
 ## Run knobs
 
-Set through the environment (`Runner.java` sets the first four for the
-app). The documented set:
+Set through the environment (`Runner.java` sets `GHOST_STAGE`,
+`GHOST_WAITER_CORE`, `GHOST_PARK`, `GHOST_FOPS_TRUE` and `GHOST_ROOTDIR`
+for the app). The documented set:
 
 | Variable | Meaning |
 |---|---|
-| `GHOST_STAGE` | `slide_dep` (the app path), `slide` (KASLR leak only), `perf_zero`, `arbwrite`, `slide_amf`, `payload_dump` (offline payload self-test). Unset runs the full `run_exploit()` path. |
+| `GHOST_STAGE` | `slide_dep` (the app path), `slide` (KASLR leak only), `perf_zero`, `arbwrite`, `slide_amf`, `payload_dump` (offline payload self-test). Unset runs the older `run_exploit()` path, which does not produce a usable deposit on this target. |
 | `GHOST_DEP_ATTEMPTS` | 1–12 deposit attempts for `slide_dep` (default 12). |
 | `GHOST_PARK=1` | Freeze the exploit threads after the trigger. Required on the deposit path: any thread exit runs futex/PI teardown on the stale state and panics. |
 | `GHOST_FOPS_TRUE=1` | Apply the 0x40 fops correction for the -0xe80 skb delta so the deposit points at the table that was actually written. |
@@ -72,10 +74,10 @@ app). The documented set:
 | `GHOST_PMODE` | `dep` (default) or `slide` payload shape. |
 | `GHOST_ROOTDIR` | Root mailbox directory (see below). |
 | `GHOST_NOROOT=1` | Stop after the fake-fops read/write; do not install root. |
-| `GHOST_DUMP_INIT=1` | Dump `init_task` fields and stop (layout check). |
+| `GHOST_DUMP_INIT=1` | Dump `init_task` fields and stop before root install (layout check; `slide_dep` then reports a cfi miss). |
 | `GHOST_LEAK_ONLY=1` | Run KernelSnitch and exit. |
 | `GHOST_ROOT_MODPROBE=1`, `GHOST_ROOT_CORE=1`, `GHOST_CORE_CMD` | Alternate root paths for kernels where the cred patch cannot run (write `modprobe_path` / `core_pattern` instead). |
-| `GHOST_DEPOSIT` | Oracles: `bootid`, `read:<off>`, `readabs:<addr>`, `hangtest`, `badlock`. |
+| `GHOST_DEPOSIT` | Oracles: `bootid`, `bootid_amf`, `read:<off>`, `readabs:<addr>`, `hangtest`, `badlock`. `slide_dep` handles `bootid`, `read:`, and `readabs:`; `bootid_amf`, `hangtest`, and `badlock` belong to the fops route. |
 | `GHOST_DEP_ZERO=1` + `GHOST_ZERO_ADDR` | Single 8-byte zero store at the data alias instead of the fops deposit. |
 
 Diagnostic-only knobs used while re-proving a shape (they change the
@@ -88,11 +90,20 @@ run): `GHOST_GROOM_OLD`, `GHOST_SPRAY_SLABS`, `GHOST_SKB_DELTA`,
 `GHOST_NOFORGE`, `GHOST_NOCONSUME`, `GHOST_NO_STAMP`,
 `GHOST_SENTINEL`, `GHOST_LIN_MARK`, `GHOST_DUMP_PAYLOAD`.
 
+`GHOST_KASLR_BASE`, `GHOST_ROUTE`, and `GHOST_PMODE` are read by the
+`run_exploit` and route paths, not by `slide_dep`: that stage hardcodes
+base and slide 0 and always uses the DEP payload shape.
+
 ## Root mailbox
 
 `ghost_rootd` polls `<dir>/rootcmd` (a shell script), executes it as
 `u:r:kernel:s0` uid 0, and appends output plus `[rc=N]` to
 `<dir>/rootout`. It also writes `<dir>/rootd.pid` and `<dir>/ROOTED`.
+
+The channel is not transactional. The daemon reads then truncates
+`rootcmd`, so a command written while it is between those steps is
+lost, and a command that times out may still run later. Use one client
+at a time and do not retry a long command until it returns.
 
 `<dir>` resolves, in order:
 
@@ -121,7 +132,8 @@ app therefore runs the payload inside a foreground service.
 
 ## Logs
 
-All of these land in the mailbox directory:
+All of these land in the mailbox directory when the payload runs from
+there (the app sets its files dir as the working directory):
 
 | File | Written by |
 |---|---|
@@ -132,5 +144,8 @@ All of these land in the mailbox directory:
 | `ROOTED`, `rootd.pid` | root daemon markers |
 | `exploit_status.txt`, `runner_ui.log` | the app (service status, UI console) |
 
-If the device panics, the last `ktrace.txt` line names the step that
-faulted.
+`ktrace.txt` is opened relative to the working directory, so a manual
+run from another directory writes it there.
+
+If the device panics, the last `ktrace.txt` line names the last step
+that ran, which is the best clue to where it faulted.

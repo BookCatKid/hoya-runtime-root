@@ -2,12 +2,9 @@ package dev.ghostlock.runner;
 
 import android.content.Context;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.io.RandomAccessFile;
 import java.nio.charset.Charset;
 
@@ -110,7 +107,7 @@ final class Runner {
 
     /**
      * Last maxLines lines of the run log, ANSI stripped, oldest first. Reads
-     * only the final 256 KB so an 800 KB log doesn't stall the UI thread.
+     * only the final 256 KB so a large log doesn't stall the refresh thread.
      */
     static String runLogTail(Context ctx, int maxLines) {
         File log = runLog(ctx);
@@ -140,39 +137,22 @@ final class Runner {
         }
     }
 
-    /** Whole run log as plain text lines (ANSI stripped). */
-    static String runLogText(Context ctx) {
-        File log = runLog(ctx);
-        if (!log.exists()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        try {
-            BufferedReader r = new BufferedReader(new InputStreamReader(
-                    new java.io.FileInputStream(log), Charset.forName("UTF-8")));
-            String line;
-            while ((line = r.readLine()) != null) {
-                sb.append(stripAnsi(line)).append('\n');
-            }
-            r.close();
-        } catch (IOException ignored) {
-        }
-        return sb.toString();
-    }
-
     static String stripAnsi(String s) {
         return s == null ? "" : s.replaceAll("\\x1b\\[[0-9;]*m", "");
     }
 
-    /** True when the exploit printed its success marker. */
-    static boolean logHasSuccess(Context ctx) {
-        return runLogText(ctx).contains("cfi ok");
+    static boolean channelAnswersAsRoot(Context ctx, long timeoutMs) {
+        try {
+            String out = rootCmd(ctx, "id", timeoutMs);
+            return out.contains("uid=0");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
-    /** True when the exploit exhausted its attempts. */
-    static boolean logHasFailure(Context ctx) {
-        String t = runLogText(ctx);
-        return t.contains("cfi miss attempt=12") || t.contains("cfi miss attempt=11");
+    /** True when ghost_rootd has written its ROOTED marker. */
+    static boolean rootMarkerExists(Context ctx) {
+        return new File(Payload.dir(ctx), "ROOTED").exists();
     }
 
     /** PID recorded by our ghost_rootd, or -1. */
@@ -206,7 +186,15 @@ final class Runner {
                 return;
             }
             if (prev.length() == 0) {
-                // First run ever. Nothing to compare, just record.
+                // No boot record. If a root marker exists, the record was
+                // lost and the marker may be from an earlier boot.
+                if (new File(dir, "ROOTED").exists()
+                        || new File(dir, "rootd.pid").exists()) {
+                    for (String n : new String[]{"rootcmd", "rootout",
+                            "rootd.pid", "ROOTED", "exploit_status.txt"}) {
+                        new File(dir, n).delete();
+                    }
+                }
                 writeFile(bootFile, cur);
                 return;
             }
@@ -253,40 +241,8 @@ final class Runner {
         }
     }
 
-    /** True when /proc/<pid>/comm is ghost_rootd. */
-    static boolean daemonAlive(int pid) {
-        if (pid <= 0) {
-            return false;
-        }
-        try {
-            byte[] b = new byte[32];
-            java.io.FileInputStream f = new java.io.FileInputStream(
-                    "/proc/" + pid + "/comm");
-            int n = f.read(b);
-            f.close();
-            return n > 0 && new String(b, 0, n, "UTF-8").trim()
-                    .equals("ghost_rootd");
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /** True when the mailbox answers as uid 0. */
-    static boolean channelAnswersAsRoot(Context ctx, Log log) {
-        return channelAnswersAsRoot(ctx, log, 8_000);
-    }
-
-    static boolean channelAnswersAsRoot(Context ctx, Log log, long timeoutMs) {
-        try {
-            String out = rootCmd(ctx, "id", timeoutMs, null);
-            return out.contains("uid=0");
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     /** Writes a script to files/rootcmd and waits for ghost_rootd output. */
-    static String rootCmd(Context ctx, String script, long timeoutMs, Log log)
+    static synchronized String rootCmd(Context ctx, String script, long timeoutMs)
             throws IOException, InterruptedException {
         File dir = Payload.dir(ctx);
         File cmd = new File(dir, "rootcmd");
@@ -294,14 +250,17 @@ final class Runner {
 
         final long baseLen = out.exists() ? out.length() : 0L;
 
+        // One write per command. ghost_rootd reads then truncates the same
+        // file, so renaming a temp file in would race with its truncate.
+        // A command written in that window can still be lost; the mailbox
+        // has no sequencing, so use one client at a time.
         FileOutputStream os = new FileOutputStream(cmd, false);
         try {
-            OutputStreamWriter w = new OutputStreamWriter(os, Charset.forName("UTF-8"));
-            w.write(script);
+            os.write(script.getBytes("UTF-8"));
             if (!script.endsWith("\n")) {
-                w.write("\n");
+                os.write('\n');
             }
-            w.flush();
+            os.flush();
         } finally {
             os.close();
         }

@@ -17,6 +17,8 @@ ks=${KS:-$HOME/.hoya-runner/runner.jks}
 kspass=${KS_PASS:-android}
 r8=${R8_JAR:-$HOME/.hoya-runner/r8.jar}
 R8_VERSION=${R8_VERSION:-9.5.32}
+version_code=${VERSION_CODE:-1}
+version_name=${VERSION_NAME:-0.1}
 
 for f in "$BT/aapt2" "$BT/d8" "$BT/zipalign" "$BT/apksigner" "$JAR"; do
   [ -e "$f" ] || { echo "missing: $f" >&2; exit 1; }
@@ -26,7 +28,7 @@ export PATH="$BT:$PATH"
 echo "==> payload"
 payload_src=${GHOSTPW:-$root/exploit/build/ghostpw}
 if [ ! -e "$payload_src" ]; then
-  echo "no payload at $payload_src — run exploit/build.sh first or set GHOSTPW=" >&2
+  echo "no payload at $payload_src; run exploit/build.sh first or set GHOSTPW=" >&2
   exit 1
 fi
 mkdir -p "$here/assets"
@@ -49,8 +51,8 @@ aapt2 link \
   --java "$out/gen" \
   --min-sdk-version 28 \
   --target-sdk-version 28 \
-  --version-code 1 \
-  --version-name 0.1 \
+  --version-code "$version_code" \
+  --version-name "$version_name" \
   "$out/res.zip"
 
 echo "==> javac"
@@ -101,7 +103,7 @@ echo "==> sign"
 apksigner sign --ks "$ks" --ks-key-alias runner \
   --ks-pass "pass:$kspass" --key-pass "pass:$kspass" \
   --out "$here/hoya-runner.apk" "$out/aligned.apk"
-apksigner verify --print-certs "$here/hoya-runner.apk" | head -3
+apksigner verify --print-certs "$here/hoya-runner.apk" | sed -n '1,3p'
 
 ls -lh "$here/hoya-runner.apk"
-echo "install: adb install -r $here/hoya-runner.apk"
+echo "install: upload $here/hoya-runner.apk to LAT"

@@ -2,12 +2,15 @@ package dev.ghostlock.runner;
 
 import android.content.Context;
 
-import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 /** Ships ghostpw as an APK asset into the app's files dir. */
 final class Payload {
@@ -23,8 +26,11 @@ final class Payload {
 
     static File binary(Context ctx) throws IOException {
         File out = new File(dir(ctx), NAME);
-        long assetSize = assetSize(ctx);
-        boolean fresh = !out.exists() || out.length() != assetSize;
+        boolean fresh = !out.exists();
+        if (!fresh) {
+            // Size alone misses a same-size replacement or corruption.
+            fresh = !Arrays.equals(assetSha256(ctx), fileSha256(out));
+        }
         if (fresh) {
             copy(ctx, NAME, out);
         }
@@ -34,11 +40,39 @@ final class Payload {
         return out;
     }
 
-    private static long assetSize(Context ctx) {
+    /**
+     * SHA-256 of the asset. Streams it instead of using openFd, which
+     * fails on compressed assets and would force a re-extract every run.
+     */
+    private static byte[] assetSha256(Context ctx) throws IOException {
+        InputStream in = ctx.getAssets().open(NAME);
         try {
-            return ctx.getAssets().openFd(NAME).getLength();
-        } catch (IOException e) {
-            return -1;
+            return sha256(in);
+        } finally {
+            in.close();
+        }
+    }
+
+    private static byte[] fileSha256(File f) throws IOException {
+        InputStream in = new FileInputStream(f);
+        try {
+            return sha256(in);
+        } finally {
+            in.close();
+        }
+    }
+
+    private static byte[] sha256(InputStream in) throws IOException {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                md.update(buf, 0, n);
+            }
+            return md.digest();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException("SHA-256 unavailable", e);
         }
     }
 

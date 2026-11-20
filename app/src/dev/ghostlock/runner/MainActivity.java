@@ -18,7 +18,7 @@ import android.widget.TextView;
 import java.util.ArrayDeque;
 
 /** UI for the GhostLock runner. The exploit runs in ExploitService (foreground-service oom_score_adj). */
-public final class MainActivity extends Activity implements Runner.Log {
+public final class MainActivity extends Activity {
 
     private static final int BG = 0xFF0F172A;
     private static final int PANEL = 0xFF1E293B;
@@ -33,33 +33,49 @@ public final class MainActivity extends Activity implements Runner.Log {
     private static final int MAX_LINES = 600;
 
     private final ArrayDeque<String> lines = new ArrayDeque<String>();
+    private final Object refreshLock = new Object();
     private TextView status;
     private TextView banner;
     private TextView console;
     private ScrollView scroller;
     private Button netButton;
     private volatile boolean poller;
+    private volatile boolean refreshing;
     private volatile long shownLogLen = -1;
+    private volatile long lastRootProbe;
+    private volatile boolean lastRootOk;
+    /** True once the console holds the user's own output instead of the payload log. */
+    private volatile boolean consoleOwned;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Keep the display awake while the user reads the console.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         Runner.wipeStaleStateIfNewBoot(this);
         setContentView(buildUi());
         append("payload: " + Payload.dir(this) + "/" + Payload.NAME);
-        refreshStatus();
-        if (getIntent() != null && getIntent().getBooleanExtra("run", false)) {
-            startRunAndLeave();
-        }
+        refreshStatusAsync();
         startPoller();
+        if (ExploitService.netShellOn(this)) {
+            // net_wanted.txt says the user wants the shell, but the
+            // listener died with the previous process. Start the service
+            // (null action) so it binds again.
+            startService(new Intent(this, ExploitService.class));
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        refreshStatus();
+        refreshStatusAsync();
         startPoller();
+    }
+
+    @Override
+    protected void onDestroy() {
+        poller = false;
+        super.onDestroy();
     }
 
     // ---------------------------------------------------------------- ui
@@ -73,7 +89,7 @@ public final class MainActivity extends Activity implements Runner.Log {
         root.setPadding(pad, pad, pad, pad);
 
         TextView title = new TextView(this);
-        title.setText("GhostLock Runner");
+        title.setText(R.string.app_name);
         title.setTextSize(22);
         title.setTextColor(TEXT);
         title.setPadding(0, 0, 0, dp(8));
@@ -81,7 +97,8 @@ public final class MainActivity extends Activity implements Runner.Log {
         status = new TextView(this);
         status.setTextSize(16);
         status.setTypeface(Typeface.DEFAULT_BOLD);
-        status.setTextColor(WARN);
+        status.setText("checking root");
+        status.setTextColor(MUTED);
         status.setPadding(dp(16), dp(12), dp(16), dp(12));
         status.setBackground(box(PANEL, BORDER));
 
@@ -93,7 +110,7 @@ public final class MainActivity extends Activity implements Runner.Log {
         banner.setVisibility(View.GONE);
         try {
             android.graphics.drawable.Drawable ghost =
-                    getResources().getDrawable(R.drawable.ic_launcher_foreground);
+                    getDrawable(R.drawable.ic_launcher_foreground);
             banner.setCompoundDrawablesWithIntrinsicBounds(null, ghost, null, null);
             banner.setCompoundDrawablePadding(dp(10));
         } catch (Throwable ignored) {
@@ -175,10 +192,10 @@ public final class MainActivity extends Activity implements Runner.Log {
         return p;
     }
 
-    private static GradientDrawable box(int fill, int stroke) {
+    private GradientDrawable box(int fill, int stroke) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(fill);
-        d.setCornerRadius(10);
+        d.setCornerRadius(dp(10));
         d.setStroke(1, stroke);
         return d;
     }
@@ -219,16 +236,6 @@ public final class MainActivity extends Activity implements Runner.Log {
         });
     }
 
-    @Override
-    public void line(final String s) {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                appendNow(s);
-            }
-        });
-    }
-
     private void append(final String s) {
         writeLogFile(s);
         runOnUiThread(new Runnable() {
@@ -255,6 +262,7 @@ public final class MainActivity extends Activity implements Runner.Log {
     }
 
     private void clearLog() {
+        consoleOwned = true;
         synchronized (lines) {
             lines.clear();
             console.setText("");
@@ -277,31 +285,64 @@ public final class MainActivity extends Activity implements Runner.Log {
 
     // -------------------------------------------------------------- flow
 
+    /** The mailbox check blocks; keep refreshStatus off the UI thread. */
+    private void refreshStatusAsync() {
+        synchronized (refreshLock) {
+            if (refreshing) {
+                return;
+            }
+            refreshing = true;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    refreshStatus();
+                } finally {
+                    refreshing = false;
+                }
+            }
+        }, "ghost-refresh").start();
+    }
+
     private void refreshStatus() {
         String s = ExploitService.status(this);
-        if (s.startsWith("running")) {
+        if (s.startsWith("running") && ExploitService.exploitActive()) {
             setStatus(s, WARN);
             hideBanner();
         } else {
-            int pid = Runner.rootDaemonPid(this);
-            if (Runner.channelAnswersAsRoot(this, null)) {
+            // A probe with no daemon costs the full timeout, so probe at
+            // most every 10s. Never write the result back to the status
+            // file: a single slow probe would wipe a real ROOTED record.
+            long now = System.currentTimeMillis();
+            if (lastRootProbe == 0 || now - lastRootProbe >= 10_000) {
+                lastRootProbe = now;
+                lastRootOk = Runner.channelAnswersAsRoot(this, 5_000);
+            }
+            if (lastRootOk) {
+                int pid = Runner.rootDaemonPid(this);
                 setStatus("ROOTED" + (pid > 0 ? " · pid " + pid : ""), OK);
-                showBanner("👻 ROOTED!", OK);
-            } else if (s.startsWith("ROOTED")) {
-                ExploitService.setStatus(this, "not rooted. Tap Get root");
-                setStatus("not rooted. Tap Get root", BAD);
-            } else if (s.startsWith("failed") || s.startsWith("start failed")) {
+                showBanner("ROOTED!", OK);
+            } else if (Runner.rootMarkerExists(this)) {
+                setStatus("root daemon not answering. Tap Get root", WARN);
+                hideBanner();
+            } else if (ExploitService.isFailure(s)) {
                 setStatus(s, BAD);
                 showBanner("exploit failed", WARN);
             } else {
                 setStatus("not rooted. Tap Get root", BAD);
+                hideBanner();
             }
         }
         updateNetButton();
-        long logLen = Runner.runLogLength(this);
-        if (logLen > 0 && logLen != shownLogLen) {
-            shownLogLen = logLen;
-            showPayloadLog(Runner.runLogTail(this, 300));
+        // Mirror the payload log while a run is live, and once on open.
+        // After that the console belongs to the user (shell output, Clear).
+        if (!consoleOwned && (ExploitService.exploitActive() || shownLogLen < 0)) {
+            long logLen = Runner.runLogLength(this);
+            if (logLen > 0 && logLen != shownLogLen) {
+                shownLogLen = logLen;
+                showPayloadLog(Runner.runLogTail(this, 300));
+            }
         }
     }
 
@@ -345,39 +386,78 @@ public final class MainActivity extends Activity implements Runner.Log {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                while (true) {
+                while (poller) {
                     try {
                         Thread.sleep(3000);
                     } catch (InterruptedException e) {
                         return;
                     }
-                    if (!isFinishing() && !isDestroyed()) {
-                        refreshStatus();
+                    if (isFinishing() || isDestroyed()) {
+                        return;
                     }
+                    refreshStatusAsync();
                 }
             }
         }, "ghost-poll").start();
     }
 
     private void confirmRun() {
-        int pid = Runner.rootDaemonPid(this);
-        if (pid > 0 && Runner.channelAnswersAsRoot(this, null, 3_000)) {
-            new AlertDialog.Builder(this)
-                    .setTitle("Re-run the exploit?")
-                    .setMessage("A root daemon already exists. Each run leaves parked kernel "
-                            + "threads behind; repeated runs without a reboot can destabilise "
-                            + "the device.\n\nReboot first if this device has run the exploit "
-                            + "many times.")
-                    .setPositiveButton("Run anyway", (d, w) -> startRunAndLeave())
-                    .setNegativeButton("Cancel", null)
-                    .show();
-        } else {
-            startRunAndLeave();
+        if (ExploitService.exploitActive()) {
+            setStatus("run already in progress", WARN);
+            return;
         }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final boolean rooted = Runner.channelAnswersAsRoot(
+                        MainActivity.this, 3_000);
+                final String s = ExploitService.status(MainActivity.this);
+                final boolean failed = ExploitService.isFailure(s);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        if (rooted) {
+                            showRerunDialog();
+                        } else if (failed) {
+                            showFailedRetryDialog();
+                        } else {
+                            startRunAndLeave();
+                        }
+                    }
+                });
+            }
+        }, "ghost-confirm").start();
+    }
+
+    private void showRerunDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Re-run the exploit?")
+                .setMessage("A root daemon already exists. Each run leaves parked kernel "
+                        + "threads behind; repeated runs without a reboot can destabilise "
+                        + "the device.\n\nReboot first if this device has run the exploit "
+                        + "many times.")
+                .setPositiveButton("Run anyway", (d, w) -> startRunAndLeave())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showFailedRetryDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Last run failed")
+                .setMessage("Reboot before retrying. Failed runs leave parked kernel "
+                        + "threads, and stacking runs makes panics likelier.")
+                .setPositiveButton("Run anyway", (d, w) -> startRunAndLeave())
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     /** Hand the run to the foreground service and exit. */
     private void startRunAndLeave() {
+        consoleOwned = false;
+        shownLogLen = -1;
         Intent i = new Intent(this, ExploitService.class)
                 .setAction(ExploitService.ACTION_RUN);
         if (android.os.Build.VERSION.SDK_INT >= 26) {
@@ -408,13 +488,8 @@ public final class MainActivity extends Activity implements Runner.Log {
                     Thread.sleep(800);
                 } catch (InterruptedException ignored) {
                 }
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        updateNetButton();
-                        refreshStatus();
-                    }
-                });
+                updateNetButton();
+                refreshStatusAsync();
             }
         }).start();
     }
@@ -423,7 +498,7 @@ public final class MainActivity extends Activity implements Runner.Log {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                netButton.setText(ExploitService.netShellWanted()
+                netButton.setText(RootServer.listening()
                         ? "Stop net shell" : "Network shell");
             }
         });
@@ -449,25 +524,31 @@ public final class MainActivity extends Activity implements Runner.Log {
     }
 
     private void shell(final String script) {
+        if (script.trim().length() == 0) {
+            return;
+        }
+        consoleOwned = true;
         new Thread(new Runnable() {
             @Override
             public void run() {
                 append("$ " + script.replace("\n", "\n  "));
                 // Nothing answers the mailbox without a live daemon. Say so
-                // instead of blocking 30s and printing nothing.
-                if (!Runner.channelAnswersAsRoot(MainActivity.this, null, 3_000)) {
+                // instead of blocking the probe timeout and printing nothing.
+                if (!Runner.channelAnswersAsRoot(MainActivity.this, 3_000)) {
                     append("  not rooted. Tap Get root first");
                     return;
                 }
                 try {
-                    String out = Runner.rootCmd(MainActivity.this, script, 30_000,
-                            MainActivity.this);
+                    String out = Runner.rootCmd(MainActivity.this, script, 30_000);
                     if (out.trim().length() == 0) {
                         append("  (no response)");
                         return;
                     }
                     for (String l : out.split("\n")) {
                         append("  " + l);
+                    }
+                    if (out.indexOf("[rc=") < 0) {
+                        append("  (timed out; the command may still be running)");
                     }
                 } catch (Exception e) {
                     append("shell error: " + e);

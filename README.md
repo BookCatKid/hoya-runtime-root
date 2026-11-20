@@ -6,8 +6,9 @@ self-contained Android app that runs it on the device.
 
 > Kernel exploit. Authorized use only, see [NOTICE](NOTICE).
 
-Root is runtime-only: it lives in the running kernel and is gone after a
-reboot. The bootloader stays locked and `dm-verity` is untouched.
+Root is runtime-only: the exploit patches a running process's credentials
+and sets SELinux permissive, so a reboot clears it. The bootloader stays
+locked and `dm-verity` is untouched.
 
 ## Contents
 
@@ -39,13 +40,14 @@ No binaries are committed.
   `$HOME/.hoya-runner/runner.jks` (`KS`, `KS_PASS` override it). If
   build-tools' bundled `d8` is broken, it downloads a stock `r8.jar`
   into `$HOME/.hoya-runner`.
+- `VERSION_CODE` / `VERSION_NAME` override the APK version (default
+  `1` / `0.1`). Bump `VERSION_CODE` for each LAT upload.
 
 ## Install
 
-The usual path onto the device is **LAT** (Lexa App Tester): build
-`app/hoya-runner.apk`, push it to LAT, install from there. If you already
-have adb access (a dev unit, or after rooting), `adb install -r
-app/hoya-runner.apk` works too.
+As far as I know, the only way to get an APK onto the device is **LAT**
+(Amazon Live App Testing). Build `app/hoya-runner.apk`, upload it to LAT,
+then install it on the device through the Appstore.
 
 ## Using the app
 
@@ -56,15 +58,17 @@ app/hoya-runner.apk` works too.
    (a foreground service) runs the payload instead, at the adj class the
    grooming counts are tuned for.
 4. Wait. A run takes 1–5 minutes and is probabilistic. The device may
-   beep/vibrate when it finishes, and the app reopens itself if the
-   screen is on.
+   beep when it finishes, and the app reopens itself if the screen is on.
+   If nothing answers after 5 minutes the app reports that and leaves the
+   payload running; check the log before rebooting.
 5. If it fails, **reboot before retrying**. Failed runs leave parked
    kernel threads; stacking runs without a reboot makes panics likelier.
-6. On success the app shows **ROOTED** and offers **Root shell** (through
-   the `rootcmd`/`rootout` mailbox) and **Network shell**
-   (`nc <device-ip> 4444`, unauthenticated — enable it deliberately).
+6. On success the app shows **ROOTED**. **Root shell** and **Network
+   shell** are always available; the network shell also works without
+   root (`nc <device-ip> 4444`; unauthenticated, so enable it
+   deliberately).
 
-Headless trigger: `am broadcast -a dev.ghostlock.runner.RUN`.
+Headless trigger over adb: `am broadcast -a dev.ghostlock.runner.RUN`.
 
 ## The exploit
 
@@ -80,10 +84,12 @@ read/write to patch a helper child's cred to uid 0 with full caps, start
 `ghost_rootd`, and set SELinux permissive. A failed attempt can panic the
 kernel.
 
-Started with no `GHOST_STAGE`, `./ghostpw` runs the full `run_exploit()`
-path (KernelSnitch + pselect route) instead; `GHOST_STAGE=slide` only
-leaks the kernel base. See [docs/DEVICE.md](docs/DEVICE.md) for the
-recipe, the environment knobs and what the logs mean.
+Started with no `GHOST_STAGE`, `./ghostpw` takes the older
+`run_exploit()` path (KernelSnitch plus the pselect route). That route
+does not produce a usable deposit on this target; the app always uses
+`slide_dep`. `GHOST_STAGE=slide` only leaks the kernel base. See
+[docs/DEVICE.md](docs/DEVICE.md) for the recipe, the environment knobs
+and what the logs mean.
 
 ## License
 

@@ -1,15 +1,17 @@
 # NOTICE. Authorized use only
 
 This repository contains a working kernel exploit for the Amazon Echo
-Show 15 (`hoya`, Fire OS 7). It grants full kernel-level code execution on
-the target device.
+Show 15 (`hoya`, Fire OS 7). It gives uid 0 and turns SELinux permissive
+on the target device.
 
 **Use it only on hardware you own or are explicitly authorized to test.**
 Running it on devices you do not own is illegal in most jurisdictions.
 
 - The exploit is probabilistic and can panic or corrupt the kernel.
-- Root is per-boot; nothing here survives a reboot.
-- Do not redistribute this repository publicly.
+- Root is per-boot. App data, including the network-shell choice,
+  persists until you clear it.
+- If you redistribute this or a modified version, keep the license and
+  attribution notices (GPL-3.0; upstream Apache-2.0).
 
 Derived in part from NebuSec/CyberMeowfia `IonStack` (Apache-2.0,
-CVE-2026-43499). Respect upstream terms.
+CVE-2026-43499). See `CREDITS.md` for upstream terms.
