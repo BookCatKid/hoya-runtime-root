@@ -81,14 +81,6 @@ own Amazon developer account and your own LAT app; this project cannot
 ship one for you. Upload the APK to your LAT app, then install it on the
 device through the Appstore.
 
-Before installing the LAT build, uninstall any copy of the app you
-installed another way. Amazon re-signs the APK with a certificate from
-your account before distributing it, so the LAT build does not carry the
-signature of the APK you uploaded. Android refuses to install an update
-whose certificate differs from the one already on the device, and the
-install fails. Uninstalling first avoids that. Uninstalling deletes the
-app's data, including `ghost_run.log`.
-
 ## Limitations
 
 Read these before running anything.

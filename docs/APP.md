@@ -73,12 +73,6 @@ dead pid), but nothing answers the mailbox and port 4444 refuses
 connections. Clearing app data removes the files too. Root again after
 any of those.
 
-A build delivered through LAT cannot be installed over one built here:
-Amazon re-signs submitted APKs with a certificate from your developer
-account, so the certificate no longer matches the local key
-(`0c269421…`), and Android rejects the update. Uninstall the local build
-first. The same applies in reverse.
-
 ## Build (no Gradle)
 
 ```sh
