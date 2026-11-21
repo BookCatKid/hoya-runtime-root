@@ -26,9 +26,9 @@ self-contained Android app that runs it on the device.
 >
 > Read [Limitations](#limitations) before you try anything.
 
-Root is runtime-only: the exploit patches a running process's credentials
-and sets SELinux permissive, so a reboot clears it. The bootloader stays
-locked and `dm-verity` is untouched.
+This exploit gives runtime-only root: it patches a running process's
+credentials and sets SELinux permissive, so a reboot clears it. It does
+not touch the bootloader or `dm-verity`.
 
 ## Contents
 
@@ -85,9 +85,11 @@ device through the Appstore.
 
 Read these before running anything.
 
-- **Root is per-boot.** A reboot clears it. As far as I know, there is no
-  persistent root and no way to make one without touching the bootloader;
-  anything is possible, but nothing here tries.
+- **Root is per-boot.** A reboot clears it. Nothing here tries to make
+  root survive a reboot: this exploit only patches a running process, so
+  persistence would mean a separate approach. I have not attempted a
+  bootloader unlock, so I cannot say whether one is possible on this
+  device; it may be.
 - **Force-stopping the app kills root.** `ghost_rootd` reparents to
   init but stays in the app's cgroup, so force-stop or a normal kill
   takes the daemon with it. Root is then gone until you run the exploit
@@ -105,8 +107,8 @@ Read these before running anything.
   one device, with a run taking 1 to 4 minutes. A failure needs a reboot
   before retrying, and your own device may land well above or below that
   figure. See [Success rate](#success-rate).
-- **No uninstall path for root.** Root is runtime-only, so a reboot is
-  the reset. There is nothing to uninstall, and nothing to clean up.
+- **No uninstall path for root.** Root lives only in memory, so a reboot
+  is the reset. There is nothing to uninstall, and nothing to clean up.
 
 ## Using the app
 

@@ -9,7 +9,7 @@
 | Android release | 9 (API 28) |
 | Security patch | 2026-03-01 |
 | Kernel | `5.4.86-ab7` |
-| Bootloader | no fastboot path; cmdline has `androidboot.unlocked_kernel=false` |
+| Bootloader | locked as shipped; no fastboot path found; cmdline has `androidboot.unlocked_kernel=false`. Not investigated further, so an unlock is not ruled out. |
 | dm-verity | `eio` (`ro.boot.veritymode=eio`; I/O errors are returned) |
 | SELinux | enforcing (set permissive by the root chain) |
 
