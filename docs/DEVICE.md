@@ -60,23 +60,74 @@ kernel threads behind.
 
 ### Measured success rate
 
-10 clean-boot runs on one Echo Show 15 (`PS75751.7809N`, kernel
-`5.4.86-ab7`), 8 rooted, 80%:
+34 clean-boot runs on one Echo Show 15 (`PS75751.7809N`, kernel
+`5.4.86-ab7`), 24 rooted, 70.6% (95% Wilson interval 54% to 83%):
 
 | Attempt that landed | Runs |
 |---|---|
-| 1 | 3 |
-| 2, 3, 5, 9, 11 | 1 each |
-| none (12 misses) | 2 |
+| 1 | 4 |
+| 2, 3, 6, 11 | 2 each |
+| 4, 5, 7, 10 | 1 each |
+| 8 | 5 |
+| 9 | 3 |
+| none (12 misses) | 10 |
 
-Successful runs took 62–163s. The two failures took 177s and 187s, used
-all 12 attempts, and ended at `cfi miss attempt=12 step=4`: the deposit
-did not land in the target slot and `try_cfi_stage()` rejected it. Both
-reported `failed. Reboot before retrying`, and neither panicked.
+Successful runs took 62–196s. The failures took 177–242s, all used the
+full 12 attempts, and all ended at `cfi miss attempt=12 step=4`: the
+deposit did not land in the target slot and `try_cfi_stage()` rejected
+it. All reported `failed. Reboot before retrying`. None of the 34 runs
+panicked.
 
 Misses in the full log cluster at step 4 (`cfi step4 fd=3 pre_rb=0
 pre_fops=0000000000000000`), so a miss is a deposit that did not take,
-not a wrong address. Ten runs on one device is a small sample.
+not a wrong address.
+
+#### What the number means
+
+Maximum-likelihood fit with the 10 failures treated as right-censored at
+12 gives **p ≈ 0.09 per attempt**, and that model predicts the observed
+rate closely (68.6% predicted at cap 12 versus 70.6% observed). A
+two-component mixture (easy boots and hard boots) fits no better: the
+easy-boot weight collapses to 0.01 and the likelihood-ratio statistic is
+0.02 against a critical value of 5.99. So the attempts behave like
+independent tries with a uniform probability, and the cap is the binding
+constraint.
+
+Projections from that fit, at roughly 11-15s per attempt plus ~55s of
+setup:
+
+| Cap | P(root) | Worst case |
+|---|---|---|
+| 12 (current) | 68.6% | 187s |
+| 16 | 78.7% | 231s |
+| 20 | 85.5% | 275s |
+| 24 | 90.1% | 319s (exceeds `EXPLOIT_TIMEOUT_MS`) |
+
+The runs arrived in three batches, which did not agree:
+
+| Batch | Runs | Rooted | Rate |
+|---|---|---|---|
+| 1 | 10 | 8 | 80% |
+| 2 | 4 | 3 | 75% |
+| 3 | 20 | 13 | 65% |
+
+The batch-to-batch spread is consistent with chance (two-proportion
+z = 0.85 between batches 1-2 and batch 3), but it shows the figure
+moves.
+
+#### Caveats on the measurement
+
+This is a property of one device, not of the exploit.
+
+- **Single device, single build.** Every run used `PS75751.7809N`,
+  kernel `5.4.86-ab7`. The deposit depends on heap and slab state, which
+  the kernel build, boot configuration, prior allocations and uptime all
+  affect.
+- **Another device may differ a lot,** in either direction. The 54% to
+  83% interval describes this unit only and does not transfer.
+- **34 runs** is enough to exclude a rate near 100% and to show that a
+  larger cap is not a quick fix. It is not enough to predict another
+  device.
 
 Two log lines are easy to misread:
 

@@ -101,9 +101,10 @@ Read these before running anything.
   is up, port 4444 hands out a uid 0 shell to anyone who can reach the
   device on the LAN. It is wildcard-bound on purpose. Enable it only on
   a network you trust, and turn it off when you are done.
-- **The exploit is probabilistic.** Measured at about 8 in 10 runs on
-  one device, with a run taking 1 to 3 minutes. A failure needs a reboot
-  before retrying.
+- **The exploit is probabilistic.** Measured at about 7 in 10 runs on
+  one device, with a run taking 1 to 4 minutes. A failure needs a reboot
+  before retrying, and your own device may land well above or below that
+  figure. See [Success rate](#success-rate).
 - **No uninstall path for root.** Root is runtime-only, so a reboot is
   the reset. There is nothing to uninstall, and nothing to clean up.
 
@@ -139,21 +140,66 @@ deliver it.
 
 ## Success rate
 
-Measured on one Echo Show 15, 10 clean-boot runs, one run per boot:
+Measured on one Echo Show 15, 34 clean-boot runs, one run per boot:
 
-| Runs | Rooted | Rate |
-|---|---|---|
-| 10 | 8 | 80% |
+| Runs | Rooted | Rate | 95% confidence interval |
+|---|---|---|---|
+| 34 | 24 | 70.6% | 54% to 83% |
 
-Successes landed on attempt 1 (three times), 2, 3, 5, 9 and 11. The two
-failures each used all 12 attempts and ended at `cfi miss attempt=12
+Successes landed across the full range of attempts:
+
+| Attempt that landed | Runs |
+|---|---|
+| 1 | 4 |
+| 2 | 2 |
+| 3 | 2 |
+| 4 | 1 |
+| 5 | 1 |
+| 6 | 2 |
+| 7 | 1 |
+| 8 | 5 |
+| 9 | 3 |
+| 10 | 1 |
+| 11 | 2 |
+| none (12 misses) | 10 |
+
+All ten failures used all 12 attempts and ended at `cfi miss attempt=12
 step=4`, meaning the deposit never landed in the target slot; the CFI
 verification caught it and the run reported `failed. Reboot before
-retrying`. Neither failure panicked.
+retrying`. None of the 34 runs panicked.
 
-A run that fails needs a reboot before the next attempt. Ten runs is a
-small sample, and this is one device on one Fire OS build, so treat 80%
-as a rough figure rather than a guarantee.
+Fitting the per-attempt probability with the failures treated as
+censored gives about 9% per attempt, and the attempts behave like
+independent tries, so the 12-attempt cap is what limits the rate.
+Raising the cap would help only slowly: about 69% at 12 attempts, 79% at
+16, 85% at 20, and 90% would need 24 attempts, which is longer than the
+app's 300s timeout allows.
+
+### How much to trust this number
+
+Treat it as a measurement of one device, not as a property of the
+exploit.
+
+- **One device, one build.** Every run was on a single Echo Show 15
+  running `PS75751.7809N` with kernel `5.4.86-ab7`. The deposit depends
+  on heap and slab state, which the kernel build, the boot
+  configuration, prior allocations and uptime all affect.
+- **Your rate may be very different.** The 95% interval for this one
+  device already spans 54% to 83%, and that interval describes this
+  device only. A different unit or a different Fire OS build could sit
+  outside it entirely, in either direction.
+- **It varies run to run.** Three batches of runs came in at 80%, 75%
+  and 65% on the same hardware with the same payload. That spread is
+  consistent with chance, but it shows the figure is not stable.
+- **34 runs is a modest sample.** Enough to rule out a rate near 100%
+  and to show that raising the cap is not a quick fix. Not enough to
+  predict your device.
+
+Expect it to usually work within a dozen attempts and sometimes need a
+reboot and another go. If you measure your own device with
+`tools/measure.sh`, your number is the one that applies to you.
+
+A run that fails needs a reboot before the next attempt.
 
 ```sh
 tools/measure.sh 10
