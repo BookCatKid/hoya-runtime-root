@@ -1,11 +1,35 @@
-run,utc,boot_id,outcome,seconds,park,cfi,status
-1,2026-11-20T09:19:23Z,0e7d394a-7b7f-4f02-acd2-78838177dfe5,rooted,130,slide child signal r=1 wr=1,slide_dep cfi ok attempt=9,ROOTED pid=23013
-2,2026-11-20T09:21:04Z,aad1a4c7-4d34-41c1-916e-136dbe97b882,rooted,64,slide child signal r=1 wr=1,slide_dep cfi ok attempt=1,ROOTED pid=10738
-3,2026-11-20T09:24:19Z,32cd5f14-33e7-4b92-8a7f-896d4eb0d44a,rooted,163,slide child signal r=1 wr=1,slide_dep cfi ok attempt=11,ROOTED pid=25307
-4,2026-11-20T09:28:05Z,c2512c32-ee0c-4b30-97aa-d58c35d42f9f,failed,177,slide child signal r=1 wr=1,,failed. Reboot before retrying
-5,2026-11-20T09:29:50Z,4f06e37a-3a03-4524-b40d-50e1d827235d,rooted,64,slide child signal r=1 wr=1,slide_dep cfi ok attempt=1,ROOTED pid=10797
-6,2026-11-20T09:31:28Z,79045340-434c-4674-8e77-0985d49b6a3d,rooted,62,slide child signal r=1 wr=1,slide_dep cfi ok attempt=1,ROOTED pid=10229
-7,2026-11-20T09:35:11Z,0fb30336-aacc-490f-b989-da943f3a2131,failed,187,slide child signal r=1 wr=1,,failed. Reboot before retrying
-8,2026-11-20T09:37:34Z,38015ee4-99ff-4cb4-b83c-0b864a93d40a,rooted,91,slide child signal r=1 wr=1,slide_dep cfi ok attempt=5,ROOTED pid=16325
-9,2026-11-20T09:39:40Z,988c724e-cb94-4781-81d6-901b64d33953,rooted,86,slide child signal r=1 wr=1,slide_dep cfi ok attempt=3,ROOTED pid=13839
-10,2026-11-20T09:41:35Z,3417a999-d6c7-407e-96c2-ab5dd674aae5,rooted,80,slide child signal r=1 wr=1,slide_dep cfi ok attempt=2,ROOTED pid=12295
+run,utc,boot_id,outcome,seconds,tries,signal,cfi,status
+1,2026-11-20T09:19:23Z,0e7d394a-7b7f-4f02-acd2-78838177dfe5,rooted,130,9,,slide_dep cfi ok attempt=9,ROOTED pid=23013
+2,2026-11-20T09:21:04Z,aad1a4c7-4d34-41c1-916e-136dbe97b882,rooted,64,1,,slide_dep cfi ok attempt=1,ROOTED pid=10738
+3,2026-11-20T09:24:19Z,32cd5f14-33e7-4b92-8a7f-896d4eb0d44a,rooted,163,11,,slide_dep cfi ok attempt=11,ROOTED pid=25307
+4,2026-11-20T09:28:05Z,c2512c32-ee0c-4b30-97aa-d58c35d42f9f,failed,177,12,,,failed. Reboot before retrying
+5,2026-11-20T09:29:50Z,4f06e37a-3a03-4524-b40d-50e1d827235d,rooted,64,1,,slide_dep cfi ok attempt=1,ROOTED pid=10797
+6,2026-11-20T09:31:28Z,79045340-434c-4674-8e77-0985d49b6a3d,rooted,62,1,,slide_dep cfi ok attempt=1,ROOTED pid=10229
+7,2026-11-20T09:35:11Z,0fb30336-aacc-490f-b989-da943f3a2131,failed,187,12,,,failed. Reboot before retrying
+8,2026-11-20T09:37:34Z,38015ee4-99ff-4cb4-b83c-0b864a93d40a,rooted,91,5,,slide_dep cfi ok attempt=5,ROOTED pid=16325
+9,2026-11-20T09:39:40Z,988c724e-cb94-4781-81d6-901b64d33953,rooted,86,3,,slide_dep cfi ok attempt=3,ROOTED pid=13839
+10,2026-11-20T09:41:35Z,3417a999-d6c7-407e-96c2-ab5dd674aae5,rooted,80,2,,slide_dep cfi ok attempt=2,ROOTED pid=12295
+1,2026-11-20T15:59:23Z,df98ac9d-0e37-4f41-ad5f-e7ca97f44758,rooted,162,10,,slide_dep cfi ok attempt=10,ROOTED pid=23859
+2,2026-11-20T16:03:32Z,f7ac7f6b-2824-4285-b504-e61d5a2130ed,failed,208,12,,,failed. Reboot before retrying
+3,2026-11-20T16:05:28Z,053a6154-c706-4acc-86c1-38c39f657054,rooted,81,2,,slide_dep cfi ok attempt=2,ROOTED pid=11527
+4,2026-11-20T16:11:22Z,afc2cbd7-8428-4aa3-84a5-2be14b491b06,rooted,109,9,,slide_dep cfi ok attempt=9,
+1,2026-11-21T02:37:48Z,84a32356-fbfb-4ed4-b861-8b3704336269,rooted,100,3,slide child signal r=1 wr=1,slide_dep cfi ok attempt=3,ROOTED pid=13820
+2,2026-11-21T02:40:15Z,6bf7fdcc-4072-42da-8584-8432cb4503fd,rooted,108,4,slide child signal r=1 wr=1,slide_dep cfi ok attempt=4,ROOTED pid=15870
+3,2026-11-21T02:42:48Z,cfc72c55-e100-472a-8c0f-5298ad25a5a5,rooted,116,6,slide child signal r=1 wr=1,slide_dep cfi ok attempt=6,ROOTED pid=17851
+4,2026-11-21T02:46:17Z,453969d3-cece-4f24-8b9f-313bc2f40b87,rooted,179,11,slide child signal r=1 wr=1,slide_dep cfi ok attempt=11,ROOTED pid=25892
+5,2026-11-21T02:50:13Z,108c2028-0a12-474d-a237-44abcc06f84f,failed,199,12,slide child signal r=1 wr=1,,failed. Reboot before retrying
+6,2026-11-21T02:53:23Z,a9537e2c-516f-49dc-94c3-35d9dcef7f0b,rooted,149,8,slide child signal r=1 wr=1,slide_dep cfi ok attempt=8,ROOTED pid=21665
+7,2026-11-21T02:57:27Z,876c5297-2138-40fb-b4a8-83cda5d41204,failed,206,12,slide child signal r=1 wr=1,,failed. Reboot before retrying
+8,2026-11-21T03:01:37Z,496a3b1e-2200-4538-b83e-44658b0d665d,failed,210,12,slide child signal r=1 wr=1,,failed. Reboot before retrying
+9,2026-11-21T03:05:33Z,940e2825-9efc-44bc-8a44-4cf833869d28,failed,199,12,slide child signal r=1 wr=1,,failed. Reboot before retrying
+10,2026-11-21T03:07:32Z,623638b2-cdc3-40ca-b7b3-68e133fe65a0,rooted,82,1,slide child signal r=1 wr=1,slide_dep cfi ok attempt=1,ROOTED pid=10698
+11,2026-11-21T03:10:46Z,6297956e-1386-44a4-9dd4-359142d9260b,rooted,156,9,slide child signal r=1 wr=1,slide_dep cfi ok attempt=9,ROOTED pid=23308
+12,2026-11-21T03:14:52Z,3ab4a9eb-ec9b-4b14-91d4-6c820f9052fd,failed,210,12,slide child signal r=1 wr=1,,failed. Reboot before retrying
+13,2026-11-21T03:19:32Z,7402a3da-75b2-4852-b1f5-8127e0933f37,failed,242,12,slide child signal r=1 wr=1,,failed. Reboot before retrying
+14,2026-11-21T03:22:31Z,c1acbfee-42cb-4333-ac8e-56ca90f8fdab,rooted,139,8,slide child signal r=1 wr=1,slide_dep cfi ok attempt=8,ROOTED pid=20772
+15,2026-11-21T03:26:17Z,ecf57c0f-059d-4492-95bb-2e8c82a4dc24,rooted,196,8,slide child signal r=1 wr=1,slide_dep cfi ok attempt=8,ROOTED pid=21689
+16,2026-11-21T03:32:31Z,afe09012-1914-46bb-a683-494c768c23a4,rooted,132,8,slide child signal r=1 wr=1,slide_dep cfi ok attempt=8,ROOTED pid=20993
+17,2026-11-21T03:35:16Z,ab85d2a3-4ae0-48ed-95bd-7f1bdc50029f,rooted,103,6,slide child signal r=1 wr=1,slide_dep cfi ok attempt=6,ROOTED pid=18583
+18,2026-11-21T03:39:21Z,20307384-1f00-4259-82c1-a4dc6628e600,failed,196,12,slide child signal r=1 wr=1,,failed. Reboot before retrying
+19,2026-11-21T03:42:21Z,6cef8b25-a013-4068-a74d-c7fc8ec0618a,rooted,142,7,slide child signal r=1 wr=1,slide_dep cfi ok attempt=7,ROOTED pid=20102
+20,2026-11-21T03:45:15Z,a219ce16-1f99-431d-9bc5-d045e4a55df7,rooted,138,8,slide child signal r=1 wr=1,slide_dep cfi ok attempt=8,ROOTED pid=21407

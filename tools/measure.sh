@@ -40,7 +40,7 @@ result_wait=${RESULT_WAIT:-480}
 pkg=dev.ghostlock.runner
 
 mkdir -p "$outdir"
-[ -f "$csv" ] || echo "run,utc,boot_id,outcome,seconds,park,cfi,status" > "$csv"
+[ -f "$csv" ] || echo "run,utc,boot_id,outcome,seconds,tries,signal,cfi,status" > "$csv"
 
 adbs() { adb -s "$serial" "$@" 2>/dev/null; }
 
@@ -80,6 +80,13 @@ fi
 
 ok=0
 bad=0
+lost=0
+
+# A dead network and a panicked device look the same from one failed
+# connect. Track consecutive unreachable boots: after this many, the
+# network is the problem, not the exploit, and the run should stop
+# rather than burn the remaining runs on aborts.
+max_lost=${MAX_LOST:-3}
 
 for i in $(seq 1 "$runs"); do
     printf '\n=== run %d/%d ===\n' "$i" "$runs"
@@ -88,12 +95,17 @@ for i in $(seq 1 "$runs"); do
     # adb drops the moment the device goes down; do not treat that as fatal.
     sleep 10
     if ! wait_boot; then
-        echo "device did not come back; aborting"
-        printf '%d,%s,%s,aborted,0,,,%s\n' "$i" \
+        lost=$((lost + 1))
+        echo "device did not come back (unreachable $lost/$max_lost)"
+        printf '%d,%s,%s,aborted,0,0,,,%s\n' "$i" \
             "$(date -u +%FT%TZ)" "" "" >> "$csv"
-        bad=$((bad + 1))
+        if [ "$lost" -ge "$max_lost" ]; then
+            echo "device unreachable $lost times in a row: check the network, stopping"
+            break
+        fi
         continue
     fi
+    lost=0
 
     bid=$(boot_id)
     printf 'boot_id %s\n' "$bid"
@@ -124,7 +136,7 @@ for i in $(seq 1 "$runs"); do
     done
     if [ "$started" = "0" ]; then
         echo "trigger did not start a run; not recording an outcome"
-        printf '%d,%s,%s,not started,0,,,%s\n' "$i" \
+        printf '%d,%s,%s,not started,0,0,,,%s\n' "$i" \
             "$(date -u +%FT%TZ)" "$bid" "" >> "$csv"
         bad=$((bad + 1))
         continue
@@ -149,10 +161,16 @@ for i in $(seq 1 "$runs"); do
                 break
                 ;;
         esac
-        # A panic reboots the device by itself: a new boot id means this
-        # run never reached an outcome.
-        if [ "$(boot_id)" != "$bid" ]; then
+        # A panic reboots the device by itself. A reboot also makes adb
+        # unreachable, so an empty boot_id means "ask again", not "panic":
+        # only a boot_id that changed while the device still answers is a
+        # panic. Confirm it came back so the next run starts from a live
+        # device instead of aborting.
+        now_bid=$(boot_id)
+        if [ -n "$now_bid" ] && [ "$now_bid" != "$bid" ]; then
             outcome=panic
+            printf 'panicked, waiting for it to come back\n'
+            wait_boot
             break
         fi
     done
@@ -166,10 +184,15 @@ for i in $(seq 1 "$runs"); do
     # deposit landed.
     park=$(log_field 'slide child signal r=[0-9]* wr=[0-9]*')
     cfi=$(log_field 'slide_dep cfi ok attempt=[0-9]*')
+    # How far the run got before giving up, for fitting the per-attempt
+    # probability. A failure that used all 12 attempts is right-censored.
+    tries=$(log_field 'slide_dep boot_id attempt=[0-9]*')
+    tries=${tries##*attempt=}
+    [ -n "$tries" ] || tries=0
 
-    printf '%-10s %3ds  %s %s\n' "$outcome" "$elapsed" "$park" "$cfi"
-    printf '%d,%s,%s,%s,%d,%s,%s,%s\n' "$i" \
-        "$(date -u +%FT%TZ)" "$bid" "$outcome" "$elapsed" \
+    printf '%-10s %3ds  tries=%-2s %s %s\n' "$outcome" "$elapsed" "$tries" "$park" "$cfi"
+    printf '%d,%s,%s,%s,%d,%s,%s,%s,%s\n' "$i" \
+        "$(date -u +%FT%TZ)" "$bid" "$outcome" "$elapsed" "$tries" \
         "$park" "$cfi" "$s" >> "$csv"
 
     case "$outcome" in
