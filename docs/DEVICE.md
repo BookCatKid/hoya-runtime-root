@@ -193,11 +193,12 @@ most of the time. It reads at most 65535 bytes and reports
 `command too large` with rc 126 above that; the app rejects scripts
 over 4000 bytes first. A command that runs past 120 seconds is killed
 with SIGKILL and reported as `command timed out after 120s` with rc
-124, so a hung command cannot lock the mailbox. A command that times
-out on the app side may still be running; the app waits up to 5
-seconds for the previous `[rc=N]` before sending anything else, and
-fails the new command rather than reporting the old output. Use one
-client at a time.
+124, so a hung command cannot lock the mailbox. The SIGKILL goes to the
+`sh` that runs the command, not to the whole process tree, so a
+grandchild can outlive it. A command that times out on the app side may
+still be running; the app waits up to 5 seconds for the previous
+`[rc=N]` before sending anything else, and fails the new command rather
+than reporting the old output. Use one client at a time.
 
 `<dir>` resolves, in order:
 
