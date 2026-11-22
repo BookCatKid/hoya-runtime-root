@@ -29,6 +29,8 @@ public final class MainActivity extends Activity {
     private static final int OK = 0xFF4ADE80;
     private static final int WARN = 0xFFFBBF24;
     private static final int BAD = 0xFFF87171;
+    private static final int FOCUS_FILL = 0xFF38BDF8;
+    private static final int FOCUS_BORDER = 0xFFE2E8F0;
 
     private static final int MAX_LINES = 600;
 
@@ -39,6 +41,7 @@ public final class MainActivity extends Activity {
     private TextView console;
     private ScrollView scroller;
     private Button netButton;
+    private Button getRootButton;
     private volatile boolean poller;
     private volatile boolean refreshing;
     private volatile long shownLogLen = -1;
@@ -57,6 +60,15 @@ public final class MainActivity extends Activity {
         append("payload: " + Payload.dir(this) + "/" + Payload.NAME);
         refreshStatusAsync();
         startPoller();
+    }
+
+    /** Give the remote a starting point once the view tree is attached. */
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && getRootButton != null && getCurrentFocus() == null) {
+            getRootButton.requestFocus();
+        }
     }
 
     @Override
@@ -129,6 +141,10 @@ public final class MainActivity extends Activity {
 
         scroller = new ScrollView(this);
         scroller.setBackground(box(0xFF0B1120, BORDER));
+        // A scrollable view is focusable and sits before the buttons in the
+        // tree, so it grabs initial focus and swallows every D-pad press as
+        // a scroll that goes nowhere. The buttons are the only focusables.
+        scroller.setFocusable(false);
         scroller.addView(console);
         LinearLayout.LayoutParams scrollerParams =
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
@@ -138,12 +154,13 @@ public final class MainActivity extends Activity {
         LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
 
-        buttons.addView(button("Get root", new Runnable() {
+        getRootButton = button("Get root", new Runnable() {
             @Override
             public void run() {
                 confirmRun();
             }
-        }), weight());
+        });
+        buttons.addView(getRootButton, weight());
         buttons.addView(button("Root shell", new Runnable() {
             @Override
             public void run() {
@@ -177,8 +194,12 @@ public final class MainActivity extends Activity {
         b.setText(label);
         b.setTextSize(15);
         b.setAllCaps(false);
-        b.setTextColor(TEXT);
-        b.setBackground(box(PANEL, BORDER));
+        b.setTextColor(buttonText());
+        // A flat GradientDrawable is a single state, so focused looks exactly
+        // like idle and the remote gives no feedback. Use a state list so
+        // focus is visible from across the room. No focusableInTouchMode:
+        // that flag makes the first tap only take focus instead of clicking.
+        b.setBackground(buttonBackground());
         b.setPadding(0, dp(10), 0, dp(10));
         b.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -187,6 +208,28 @@ public final class MainActivity extends Activity {
             }
         });
         return b;
+    }
+
+    /** Fill and border per interaction state: pressed/focused, idle. */
+    private android.graphics.drawable.StateListDrawable buttonBackground() {
+        android.graphics.drawable.StateListDrawable d =
+                new android.graphics.drawable.StateListDrawable();
+        d.addState(new int[]{android.R.attr.state_pressed},
+                box(FOCUS_FILL, FOCUS_BORDER, 2));
+        d.addState(new int[]{android.R.attr.state_focused},
+                box(FOCUS_FILL, FOCUS_BORDER, 2));
+        d.addState(new int[]{}, box(PANEL, BORDER, 1));
+        return d;
+    }
+
+    /** Light text on the dark button, dark text on the bright focused button. */
+    private android.content.res.ColorStateList buttonText() {
+        return new android.content.res.ColorStateList(
+                new int[][]{
+                        new int[]{android.R.attr.state_pressed},
+                        new int[]{android.R.attr.state_focused},
+                        new int[]{}},
+                new int[]{BG, BG, TEXT});
     }
 
     private LinearLayout.LayoutParams weight() {
@@ -198,10 +241,14 @@ public final class MainActivity extends Activity {
     }
 
     private GradientDrawable box(int fill, int stroke) {
+        return box(fill, stroke, 1);
+    }
+
+    private GradientDrawable box(int fill, int stroke, int strokeWidth) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(fill);
         d.setCornerRadius(dp(10));
-        d.setStroke(1, stroke);
+        d.setStroke(strokeWidth, stroke);
         return d;
     }
 
@@ -429,12 +476,23 @@ public final class MainActivity extends Activity {
                         } else if (failed) {
                             showFailedRetryDialog();
                         } else {
-                            startRunAndLeave();
+                            showStartDialog();
                         }
                     }
                 });
             }
         }, "ghost-confirm").start();
+    }
+
+    private void showStartDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Run the exploit?")
+                .setMessage("The app closes while it runs. A run takes 1 to 3 minutes. "
+                        + "It plays a sound when it finishes and reopens. "
+                        + "If it fails, reboot before trying again.")
+                .setPositiveButton("Run", (d, w) -> startRunAndLeave())
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void showRerunDialog() {
@@ -478,6 +536,7 @@ public final class MainActivity extends Activity {
     // ----------------------------------------------------------- shells
 
     private void toggleNetShell() {
+        final boolean was = RootServer.listening();
         Intent i = new Intent(this, ExploitService.class)
                 .setAction(ExploitService.ACTION_NET);
         if (android.os.Build.VERSION.SDK_INT >= 26) {
@@ -485,18 +544,32 @@ public final class MainActivity extends Activity {
         } else {
             startService(i);
         }
-        // Reflect actual state after the service applies it.
+        // Wait for the service to apply the toggle, then say what happened.
+        // The service's own listener lines only reach the foreground
+        // notification, which this device cannot display.
         new Thread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    Thread.sleep(800);
-                } catch (InterruptedException ignored) {
+                for (int n = 0; n < 24 && RootServer.listening() == was; n++) {
+                    try {
+                        Thread.sleep(250);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
                 }
                 updateNetButton();
+                if (RootServer.listening()) {
+                    append("network shell listening on port " + RootServer.PORT);
+                    for (String ip : RootServer.lanIps()) {
+                        append("  connect: nc " + ip + " " + RootServer.PORT);
+                    }
+                    append("  WARNING: unauthenticated shell on your LAN");
+                } else {
+                    append(was ? "network shell off" : "network shell did not start");
+                }
                 refreshStatusAsync();
             }
-        }).start();
+        }, "ghost-net").start();
     }
 
     private void updateNetButton() {
