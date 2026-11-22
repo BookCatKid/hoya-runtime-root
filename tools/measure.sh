@@ -11,7 +11,7 @@
 #   tools/measure.sh [runs]        default 10
 #
 # Env:
-#   SERIAL   adb serial (default 192.168.1.28:5555)
+#   SERIAL   adb serial (default 192.0.2.10:5555, set SERIAL to your device)
 #   OUT      results directory (default tools/results)
 #   INSTALL  set to 1 to install app/hoya-runner.apk before the first run
 #   BOOT_WAIT, RESULT_WAIT   seconds (default 240, 480)
@@ -31,7 +31,7 @@ set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 
-serial=${SERIAL:-192.168.1.28:5555}
+serial=${SERIAL:-192.0.2.10:5555}
 runs=${1:-10}
 outdir=${OUT:-$here/results}
 csv=$outdir/runs.csv
