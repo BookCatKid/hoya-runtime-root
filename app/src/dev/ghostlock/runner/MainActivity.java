@@ -42,6 +42,7 @@ public final class MainActivity extends Activity {
     private ScrollView scroller;
     private Button netButton;
     private Button getRootButton;
+    private Button adbButton;
     private volatile boolean poller;
     private volatile boolean refreshing;
     private volatile long shownLogLen = -1;
@@ -151,6 +152,22 @@ public final class MainActivity extends Activity {
         scrollerParams.topMargin = dp(12);
         scrollerParams.bottomMargin = dp(12);
 
+        // Explicit ADB-over-TCP choice (off / until reboot / at boot). Its own
+        // row so it reads as a mode, not an action. "At boot" warns first.
+        adbButton = button(adbLabel(Runner.adbMode(this)), new Runnable() {
+            @Override
+            public void run() {
+                cycleAdbMode();
+            }
+        });
+        LinearLayout adbRow = new LinearLayout(this);
+        adbRow.setOrientation(LinearLayout.HORIZONTAL);
+        adbRow.addView(adbButton, weight());
+        LinearLayout.LayoutParams adbRowParams =
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+        adbRowParams.bottomMargin = dp(8);
+
         LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
 
@@ -185,6 +202,7 @@ public final class MainActivity extends Activity {
         root.addView(status);
         root.addView(banner);
         root.addView(scroller, scrollerParams);
+        root.addView(adbRow, adbRowParams);
         root.addView(buttons);
         return root;
     }
@@ -580,6 +598,63 @@ public final class MainActivity extends Activity {
                         ? "Stop net shell" : "Network shell");
             }
         });
+    }
+
+    // ------------------------------------------------------- adb mode
+
+    private String adbLabel(String mode) {
+        if (Runner.ADB_BOOT.equals(mode)) {
+            return "ADB over TCP: At boot";
+        }
+        if (Runner.ADB_OFF.equals(mode)) {
+            return "ADB over TCP: Off";
+        }
+        return "ADB over TCP: Until reboot";
+    }
+
+    private void updateAdbButton() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                adbButton.setText(adbLabel(Runner.adbMode(MainActivity.this)));
+            }
+        });
+    }
+
+    /** Cycle Off -> Until reboot -> At boot -> Off. "At boot" warns first. */
+    private void cycleAdbMode() {
+        String cur = Runner.adbMode(this);
+        final String next;
+        if (Runner.ADB_OFF.equals(cur)) {
+            next = Runner.ADB_REBOOT;
+        } else if (Runner.ADB_REBOOT.equals(cur)) {
+            next = Runner.ADB_BOOT;
+        } else {
+            next = Runner.ADB_OFF;
+        }
+        if (Runner.ADB_BOOT.equals(next)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Enable ADB at every boot?")
+                    .setMessage("Sets persist.adb.tcp.port=5555, so adbd listens on your "
+                            + "LAN after every reboot — as a shell (u:r:shell:s0), not "
+                            + "root; the exploit root is gone until you run Get root "
+                            + "again.\n\nOnly a host whose adb key is already authorized "
+                            + "can connect. To undo later: set ADB to Off and reboot, or "
+                            + "run: setprop persist.adb.tcp.port \"\"")
+                    .setPositiveButton("Enable at boot",
+                            new android.content.DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(android.content.DialogInterface d, int w) {
+                                    Runner.setAdbMode(MainActivity.this, next);
+                                    updateAdbButton();
+                                }
+                            })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        } else {
+            Runner.setAdbMode(this, next);
+            updateAdbButton();
+        }
     }
 
     private void shellPrompt() {

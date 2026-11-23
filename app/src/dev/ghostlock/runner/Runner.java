@@ -15,18 +15,33 @@ final class Runner {
         void line(String s);
     }
 
-    /** Env for the slide_dep root path. */
+    /** Env for the slide_dep root path. The ADB-over-TCP flags are added from
+     *  the user's explicit choice (see adbMode); they are NOT hardcoded here,
+     *  because enabling network ADB is a trust-boundary decision. */
     private static final String[][] EXPLOIT_ENV = {
             {"GHOST_STAGE", "slide_dep"},
             {"GHOST_WAITER_CORE", "2"},
             {"GHOST_PARK", "1"},
             {"GHOST_FOPS_TRUE", "1"},
-            // Copy init's SELinux SID and bring up adbd over TCP (port 5555)
-            // so a host with a pre-authorized key gets a real u:r:shell:s0
-            // with full binder. Drop this line to keep the classic
-            // kernel-SID nc shell only.
-            {"GHOST_ENABLE_ADB", "1"},
     };
+
+    /** ADB-over-TCP choice, persisted so the service can read it at run time. */
+    static final String PREFS = "ghost_prefs";
+    static final String KEY_ADB_MODE = "adb_mode";
+    static final String ADB_OFF = "off";
+    static final String ADB_REBOOT = "reboot"; // service.adb.tcp.port only (until reboot)
+    static final String ADB_BOOT = "boot";     // + persist.adb.tcp.port (adbd at every boot)
+
+    /** Current ADB-over-TCP mode; defaults to "until reboot". */
+    static String adbMode(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_ADB_MODE, ADB_REBOOT);
+    }
+
+    static void setAdbMode(Context ctx, String mode) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_ADB_MODE, mode).apply();
+    }
 
     static final int EXPLOIT_TIMEOUT_MS = 300_000;
     static final String RUN_LOG = "ghost_run.log";
@@ -82,6 +97,18 @@ final class Runner {
         pb.environment().put("GHOST_ROOTDIR", work.getAbsolutePath());
         for (String[] kv : EXPLOIT_ENV) {
             pb.environment().put(kv[0], kv[1]);
+        }
+        // Enable ADB over TCP only per the user's explicit choice. "Until
+        // reboot" sets the non-persistent port; "At boot" also sets
+        // persist.adb.tcp.port so adbd (a shell domain, not root) returns on
+        // every boot. "Off" passes nothing and keeps the classic kernel-SID
+        // nc shell only.
+        String mode = adbMode(ctx);
+        if (ADB_REBOOT.equals(mode) || ADB_BOOT.equals(mode)) {
+            pb.environment().put("GHOST_ENABLE_ADB", "1");
+        }
+        if (ADB_BOOT.equals(mode)) {
+            pb.environment().put("GHOST_ADB_PERSIST", "1");
         }
         return pb.start();
     }
