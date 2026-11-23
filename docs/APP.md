@@ -22,6 +22,20 @@ apps targeting API 29 or newer).
    give it a non-zero adj (service class, ~200), writes
    `oom_score_adj=200` itself, then runs the payload with output
    appended to `files/ghost_run.log`.
+   **ADB over TCP is an explicit, persisted choice, not a default** — the
+   trust boundary of a LAN adb listener is the user's to set. The button
+   cycles **Off / Until reboot / At boot** (stored in `SharedPreferences`
+   `ghost_prefs/adb_mode`, default *Until reboot*); `Runner.startExploit`
+   turns that into env for the payload: *Until reboot* passes
+   `GHOST_ENABLE_ADB=1` (non-persistent `service.adb.tcp.port`, cleared by a
+   reboot — so running once with it and again without still leaves `5555`
+   up until the next reboot); *At boot* adds `GHOST_ADB_PERSIST=1`
+   (`persist.adb.tcp.port`, adbd returns every boot as a shell, not root)
+   behind a confirm dialog; *Off* passes nothing. With ADB enabled the
+   `ghost_rootd` nc shell on 4444 **still runs full-root** (kernel SID):
+   the payload uses init's SID only transiently to bring adbd up, then
+   restores the kernel SID before forking the daemon, so there is no
+   init→toolbox regression on the nc shell.
 3. The status view probes the mailbox with `id` at most every 10
    seconds; the network shell probes on its own. A `uid=0` answer flips
    the UI to ROOTED and shows the recorded pid. A `ROOTED` file with no
@@ -95,7 +109,8 @@ override).
 
 - `Payload.java`: asset extraction, SHA-256 refresh, exec bit.
 - `Runner.java`: spawns ghostpw (quiet, log-to-file, env from
-  `EXPLOIT_ENV`), mailbox client, log tailing, boot-id state wipe.
+  `EXPLOIT_ENV` plus the ADB flags derived from the user's `adbMode`
+  choice), mailbox client, log tailing, boot-id state wipe.
 - `ExploitService.java`: foreground service: adj wait, exploit run,
   status file, notification, result chime, net-shell toggle.
 - `RootServer.java`: TCP shell (app context, upgrades to root mailbox).
