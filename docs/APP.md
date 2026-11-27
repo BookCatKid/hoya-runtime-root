@@ -24,14 +24,17 @@ apps targeting API 29 or newer).
    appended to `files/ghost_run.log`.
    **ADB over TCP is an explicit, persisted choice, not a default** — the
    trust boundary of a LAN adb listener is the user's to set. The button
-   cycles **Off / Until reboot / At boot** (stored in `SharedPreferences`
+   cycles **Off / Until reboot** (stored in `SharedPreferences`
    `ghost_prefs/adb_mode`, default *Until reboot*); `Runner.startExploit`
    turns that into env for the payload: *Until reboot* passes
    `GHOST_ENABLE_ADB=1` (non-persistent `service.adb.tcp.port`, cleared by a
    reboot — so running once with it and again without still leaves `5555`
-   up until the next reboot); *At boot* adds `GHOST_ADB_PERSIST=1`
-   (`persist.adb.tcp.port`, adbd returns every boot as a shell, not root)
-   behind a confirm dialog; *Off* passes nothing. With ADB enabled the
+   up until the next reboot); *Off* passes nothing. There is no persistent
+   ("at boot") choice: the app has no way to clear `persist.adb.tcp.port`
+   from the kernel-SID shell, so it never sets it (the `GHOST_ADB_PERSIST`
+   payload env below is a manual power-user knob, not wired to the app).
+   Enabling ADB restarts `adbd`, so any attached adb host is dropped and
+   must reconnect. With ADB enabled the
    `ghost_rootd` nc shell on 4444 **still runs full-root** (kernel SID):
    the payload uses init's SID only transiently to bring adbd up, then
    restores the kernel SID before forking the daemon, so there is no

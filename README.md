@@ -258,11 +258,22 @@ listener is a trust-boundary decision. The **ADB over TCP** button cycles:
   only (`service.adb.tcp.port`); a reboot clears it. Note it stays up for
   the rest of the current boot even if you then run with ADB off — "until
   reboot", not "until the next run".
-- **At boot** (separate opt-in, warns first) — also sets
-  `persist.adb.tcp.port=5555` so `adbd` returns on every boot. After a
-  reboot that listener is a **shell domain, not root**; the exploit root
-  is gone until you run **Get root** again. Clear it with
-  `setprop persist.adb.tcp.port ""` (or set ADB to Off and reboot).
+
+There is deliberately **no persistent ("at boot") choice**: the app runs as
+a `u:r:shell:s0` listener after a reboot, with no way to clear
+`persist.adb.tcp.port` from the kernel-SID shell, so an opt-in the app
+could not revoke is left out. If you want `adbd` on every boot, set
+`persist.adb.tcp.port=5555` yourself from a root shell, and clear it the
+same way (`setprop persist.adb.tcp.port ""`).
+
+Two more things to know before you enable it:
+
+- Enabling ADB over TCP **restarts `adbd`** (`ctl.stop`/`ctl.start`), which
+  drops any adb connection currently attached over USB or the network; the
+  host has to reconnect.
+- A `5555` listener you see after a reboot may just be the device's own
+  stock `service.adb.tcp.port`, not this feature — "Until reboot" sets only
+  the current boot's runtime port and never the persistent one.
 
 How it keeps the nc shell at full root: the payload copies init's SELinux
 SID onto the root child only long enough to bring `adbd` up in-process

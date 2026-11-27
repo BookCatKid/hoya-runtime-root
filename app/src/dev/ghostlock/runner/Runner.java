@@ -30,7 +30,6 @@ final class Runner {
     static final String KEY_ADB_MODE = "adb_mode";
     static final String ADB_OFF = "off";
     static final String ADB_REBOOT = "reboot"; // service.adb.tcp.port only (until reboot)
-    static final String ADB_BOOT = "boot";     // + persist.adb.tcp.port (adbd at every boot)
 
     /** Current ADB-over-TCP mode; defaults to "until reboot". */
     static String adbMode(Context ctx) {
@@ -99,16 +98,14 @@ final class Runner {
             pb.environment().put(kv[0], kv[1]);
         }
         // Enable ADB over TCP only per the user's explicit choice. "Until
-        // reboot" sets the non-persistent port; "At boot" also sets
-        // persist.adb.tcp.port so adbd (a shell domain, not root) returns on
-        // every boot. "Off" passes nothing and keeps the classic kernel-SID
-        // nc shell only.
-        String mode = adbMode(ctx);
-        if (ADB_REBOOT.equals(mode) || ADB_BOOT.equals(mode)) {
+        // reboot" sets the non-persistent service.adb.tcp.port, which a reboot
+        // clears; "Off" passes nothing and keeps the classic kernel-SID nc
+        // shell only. There is deliberately no persistent ("at boot") choice:
+        // the app would have no way to clear persist.adb.tcp.port from the
+        // kernel-SID shell, so an auto-start-on-boot opt-in the app cannot
+        // revoke is left out of this change.
+        if (ADB_REBOOT.equals(adbMode(ctx))) {
             pb.environment().put("GHOST_ENABLE_ADB", "1");
-        }
-        if (ADB_BOOT.equals(mode)) {
-            pb.environment().put("GHOST_ADB_PERSIST", "1");
         }
         return pb.start();
     }
@@ -224,6 +221,15 @@ final class Runner {
         try {
             File dir = Payload.dir(ctx);
             File bootFile = new File(dir, "boot_id.txt");
+            // Never touch root state, or record a boot_id, while an exploit run
+            // is in progress: the slide stage spoofs /proc/.../boot_id, so a
+            // read now could store the fake value and make the next start wrongly
+            // wipe a daemon that is actually alive. Also leave it alone while
+            // ghost_rootd is still running — a live daemon means the state is
+            // current regardless of what boot_id says.
+            if (ExploitService.exploitActive() || rootDaemonAlive(dir)) {
+                return;
+            }
             String cur = readFile(new File("/proc/sys/kernel/random/boot_id"));
             String prev = readFile(bootFile);
             if (cur.length() == 0) {
@@ -253,6 +259,20 @@ final class Runner {
             }
             writeFile(bootFile, cur);
         } catch (Exception ignored) {
+        }
+    }
+
+    /** True when rootd.pid names a process that is still alive (/proc/<pid>). */
+    private static boolean rootDaemonAlive(File dir) {
+        String pid = readFile(new File(dir, "rootd.pid"));
+        if (pid.length() == 0) {
+            return false;
+        }
+        try {
+            int p = Integer.parseInt(pid.trim());
+            return p > 0 && new File("/proc/" + p).exists();
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 
