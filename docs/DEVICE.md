@@ -14,9 +14,16 @@
 | SELinux | enforcing (set permissive by the root chain) |
 
 `exploit/src/targets/hoya-PS75741.7082N/` holds the offsets and build
-constants for this kernel. The directory keeps the upstream target label
-(`hoya-PS75741.7082N`); the device build string is `PS75751.7809N`. The
-offsets are not portable to other Fire OS builds.
+constants. The directory keeps the upstream target label
+(`hoya-PS75741.7082N`); the device these changes were developed and
+tested on reports build `PS75751.7809N` (confirmed via
+`getprop ro.build.version.incremental`). Both carry kernel `5.4.86-ab7`,
+and the offsets are keyed to that kernel image, so the single committed
+target applies to both — the label and the tested build string differ,
+the kernel does not. The offsets are not portable to other Fire OS
+kernels. The `GHOST_ENABLE_ADB` path additionally resolves init's live
+SELinux SID at run time (it was `61` on the tested build) and sanity-checks
+it before use, so it does not hardcode a per-build SID.
 
 ## Exploit summary
 
@@ -156,6 +163,8 @@ for the app). The documented set:
 | `GHOST_ROUTE=slide` | Use `run_slide_deposit_route()` (forked trio + `try_cfi_stage`) instead of the main-thread pselect route. |
 | `GHOST_PMODE` | `dep` (default) or `slide` payload shape. |
 | `GHOST_ROOTDIR` | Root mailbox directory (see below). |
+| `GHOST_ENABLE_ADB=1` | After root, briefly copy init's SELinux SID onto the child cred (instead of `u:r:kernel:s0`) so it can bring up `adbd` over TCP in-process (`service.adb.tcp.port=5555`, `ctl.start=adbd`), then flip the child cred SID **back to the kernel SID before it forks `ghost_rootd`**, so the persistent daemon (and the 4444 nc shell) keep full-root file/exec — the init SID lives only for the short window that talks to the property service. A host with a pre-authorized adb key then lands in `u:r:shell:s0` with full binder (`pm`/`am`/`settings`/`service`/`dumpsys`). Needed because the kernel SID gets no binder and flipping global enforcing does not reach daemons that cached it at boot. The resolved init SID is sanity-checked (nonzero, not the kernel SID, below `0x10000`); if it looks wrong the child stays at the kernel SID with no adb, and root is unaffected. **Refuses to enable adb when no authorized adb key is staged** (`/data/misc/adb/adb_keys`), since `ro.adb.secure=1` and the keyless Show has no prompt to approve an otherwise-open `5555`. The TCP port is non-persistent (`service.adb.tcp.port`, not `persist.*`), so a reboot clears it — nothing survives opt-out (add `GHOST_ADB_PERSIST=1` to keep it across boots). Applies to the default cred-patch root path only, not the `GHOST_ROOT_MODPROBE` / `GHOST_ROOT_CORE` alternates (which have no init-SID child). An adb-enable failure is logged but never fails root. Bringing adbd up **restarts the service** (`ctl.stop`/`ctl.start`), dropping any adb host currently attached (USB or TCP) until it reconnects. A `5555` listener seen after a reboot may be the device's own stock `service.adb.tcp.port`, not this flag, which sets only the current boot's runtime port. The app sets this from its explicit **ADB over TCP** choice (Off / Until reboot, default *Until reboot*); *Off* keeps the classic kernel-SID nc shell only. |
+| `GHOST_ADB_PERSIST=1` | Only meaningful with `GHOST_ENABLE_ADB=1`. Also sets `persist.adb.tcp.port=5555` so `adbd` auto-starts on every boot. After a reboot it is a `u:r:shell:s0` listener, **not root** — the exploit root is gone until `Get root` runs again. **Manual-only knob: the app never sets it** — it has no way to clear `persist.adb.tcp.port` from the kernel-SID shell, so a persistent listener the app could not revoke is kept out of the UI. Set it by hand only if you want adbd on every boot, and clear it the same way: `setprop persist.adb.tcp.port ""`. |
 | `GHOST_NOROOT=1` | Stop after the fake-fops read/write; do not install root. |
 | `GHOST_DUMP_INIT=1` | Dump `init_task` fields and stop before root install (layout check; `slide_dep` then reports a cfi miss). |
 | `GHOST_LEAK_ONLY=1` | Run KernelSnitch and exit. |

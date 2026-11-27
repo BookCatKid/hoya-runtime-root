@@ -242,6 +242,50 @@ does not produce a usable deposit on this target; the app always uses
 [docs/DEVICE.md](docs/DEVICE.md) for the recipe, the environment knobs
 and what the logs mean.
 
+## ADB over TCP (optional)
+
+The runtime root is limited to file and exec: `ghost_rootd` runs in
+`u:r:kernel:s0`, which servicemanager grants no binder, so `pm`, `am`,
+`settings`, `service` and `dumpsys` all fail. Enabling ADB over TCP gets
+you a real `u:r:shell:s0` with full binder, while the 4444 nc shell stays
+full root.
+
+It is an **explicit choice in the app**, not a default — a LAN adb
+listener is a trust-boundary decision. The **ADB over TCP** button cycles:
+
+- **Off** — classic kernel-SID nc shell only (4444), no adb.
+- **Until reboot** (default) — brings up `adbd` on `5555` for this boot
+  only (`service.adb.tcp.port`); a reboot clears it. Note it stays up for
+  the rest of the current boot even if you then run with ADB off — "until
+  reboot", not "until the next run".
+
+There is deliberately **no persistent ("at boot") choice**: the app runs as
+a `u:r:shell:s0` listener after a reboot, with no way to clear
+`persist.adb.tcp.port` from the kernel-SID shell, so an opt-in the app
+could not revoke is left out. If you want `adbd` on every boot, set
+`persist.adb.tcp.port=5555` yourself from a root shell, and clear it the
+same way (`setprop persist.adb.tcp.port ""`).
+
+Two more things to know before you enable it:
+
+- Enabling ADB over TCP **restarts `adbd`** (`ctl.stop`/`ctl.start`), which
+  drops any adb connection currently attached over USB or the network; the
+  host has to reconnect.
+- A `5555` listener you see after a reboot may just be the device's own
+  stock `service.adb.tcp.port`, not this feature — "Until reboot" sets only
+  the current boot's runtime port and never the persistent one.
+
+How it keeps the nc shell at full root: the payload copies init's SELinux
+SID onto the root child only long enough to bring `adbd` up in-process
+(avoiding the `init→toolbox` transition a shelled-out `setprop` would
+hit), then flips the cred SID back to the kernel SID before the child
+forks `ghost_rootd`, so the daemon never inherits init's SID.
+
+Because `ro.adb.secure=1` on this device and the Show has no prompt to
+approve a connection, the payload **refuses to open `5555` unless an
+authorized adb key is already staged** (`/data/misc/adb/adb_keys`). Stage
+your host key first. An adb-enable failure never fails root.
+
 ## Contributing
 
 Issues and pull requests are both welcome.

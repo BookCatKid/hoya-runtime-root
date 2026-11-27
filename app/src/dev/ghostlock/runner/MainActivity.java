@@ -14,6 +14,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayDeque;
 
@@ -42,6 +43,7 @@ public final class MainActivity extends Activity {
     private ScrollView scroller;
     private Button netButton;
     private Button getRootButton;
+    private Button adbButton;
     private volatile boolean poller;
     private volatile boolean refreshing;
     private volatile long shownLogLen = -1;
@@ -151,6 +153,22 @@ public final class MainActivity extends Activity {
         scrollerParams.topMargin = dp(12);
         scrollerParams.bottomMargin = dp(12);
 
+        // Explicit ADB-over-TCP choice (off / until reboot). Its own row so it
+        // reads as a mode, not an action.
+        adbButton = button(adbLabel(Runner.adbMode(this)), new Runnable() {
+            @Override
+            public void run() {
+                cycleAdbMode();
+            }
+        });
+        LinearLayout adbRow = new LinearLayout(this);
+        adbRow.setOrientation(LinearLayout.HORIZONTAL);
+        adbRow.addView(adbButton, weight());
+        LinearLayout.LayoutParams adbRowParams =
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+        adbRowParams.bottomMargin = dp(8);
+
         LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
 
@@ -185,6 +203,7 @@ public final class MainActivity extends Activity {
         root.addView(status);
         root.addView(banner);
         root.addView(scroller, scrollerParams);
+        root.addView(adbRow, adbRowParams);
         root.addView(buttons);
         return root;
     }
@@ -580,6 +599,41 @@ public final class MainActivity extends Activity {
                         ? "Stop net shell" : "Network shell");
             }
         });
+    }
+
+    // ------------------------------------------------------- adb mode
+
+    // "at next root", not a live state: the mode is only applied when the
+    // exploit next runs (Get root), so changing it on a rooted Echo needs
+    // another Get root to take effect. The button only stores a preference;
+    // it never opens or closes adbd by itself.
+    private String adbLabel(String mode) {
+        if (Runner.ADB_OFF.equals(mode)) {
+            return "ADB at next root: Off";
+        }
+        return "ADB at next root: Until reboot";
+    }
+
+    private void updateAdbButton() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                adbButton.setText(adbLabel(Runner.adbMode(MainActivity.this)));
+            }
+        });
+    }
+
+    /** Cycle Off -> Until reboot -> Off. The mode is applied at the next root. */
+    private void cycleAdbMode() {
+        String cur = Runner.adbMode(this);
+        String next = Runner.ADB_OFF.equals(cur) ? Runner.ADB_REBOOT : Runner.ADB_OFF;
+        Runner.setAdbMode(this, next);
+        updateAdbButton();
+        // Already rooted: the live daemon keeps whatever this boot's root set.
+        // Say so, since the control cannot change a running daemon's adb.
+        if (lastRootOk) {
+            Toast.makeText(this, "Applies at the next Get root", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void shellPrompt() {
