@@ -14,6 +14,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayDeque;
 
@@ -602,11 +603,15 @@ public final class MainActivity extends Activity {
 
     // ------------------------------------------------------- adb mode
 
+    // "at next root", not a live state: the mode is only applied when the
+    // exploit next runs (Get root), so changing it on a rooted Echo needs
+    // another Get root to take effect. The button only stores a preference;
+    // it never opens or closes adbd by itself.
     private String adbLabel(String mode) {
         if (Runner.ADB_OFF.equals(mode)) {
-            return "ADB over TCP: Off";
+            return "ADB at next root: Off";
         }
-        return "ADB over TCP: Until reboot";
+        return "ADB at next root: Until reboot";
     }
 
     private void updateAdbButton() {
@@ -618,12 +623,17 @@ public final class MainActivity extends Activity {
         });
     }
 
-    /** Cycle Off -> Until reboot -> Off. */
+    /** Cycle Off -> Until reboot -> Off. The mode is applied at the next root. */
     private void cycleAdbMode() {
         String cur = Runner.adbMode(this);
         String next = Runner.ADB_OFF.equals(cur) ? Runner.ADB_REBOOT : Runner.ADB_OFF;
         Runner.setAdbMode(this, next);
         updateAdbButton();
+        // Already rooted: the live daemon keeps whatever this boot's root set.
+        // Say so, since the control cannot change a running daemon's adb.
+        if (lastRootOk) {
+            Toast.makeText(this, "Applies at the next Get root", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void shellPrompt() {
