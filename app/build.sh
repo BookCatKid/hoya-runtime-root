@@ -17,8 +17,8 @@ ks=${KS:-$HOME/.hoya-runner/runner.jks}
 kspass=${KS_PASS:-android}
 r8=${R8_JAR:-$HOME/.hoya-runner/r8.jar}
 R8_VERSION=${R8_VERSION:-9.5.32}
-version_code=${VERSION_CODE:-1}
-version_name=${VERSION_NAME:-0.1}
+version_code=${VERSION_CODE:-2}
+version_name=${VERSION_NAME:-0.2}
 
 for f in "$BT/aapt2" "$BT/d8" "$BT/zipalign" "$BT/apksigner" "$JAR"; do
   [ -e "$f" ] || { echo "missing: $f" >&2; exit 1; }

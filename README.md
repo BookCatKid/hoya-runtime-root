@@ -64,7 +64,7 @@ No binaries are committed.
   If build-tools' bundled `d8` is broken, it downloads a stock `r8.jar`
   into `$HOME/.hoya-runner`.
 - `VERSION_CODE` / `VERSION_NAME` override the APK version (default
-  `1` / `0.1`). Bump `VERSION_CODE` for each LAT upload.
+  `2` / `0.2`). Bump `VERSION_CODE` for each LAT upload.
 
 ## Install
 
